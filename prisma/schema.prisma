@@ -1,0 +1,398 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  MEMBER
+  VOLUNTEER
+  DONOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum BookCategory {
+  FIKSI_SASTRA
+  SAINS_FAKTA
+  SEJARAH
+  PSIKOLOGI
+  EDUKASI_ANAK
+  ENSIKLOPEDIA
+  KOMIK_EDUKASI
+}
+
+enum BookStatus {
+  AVAILABLE
+  BORROWED
+  MAINTENANCE
+}
+
+enum ReservationStatus {
+  READY_FOR_PICKUP
+  CLAIMED
+  EXPIRED
+  CANCELLED
+}
+
+enum LoanStatus {
+  BORROWED
+  RETURNED
+  OVERDUE
+  LOST
+}
+
+enum BookCondition {
+  GOOD
+  MINOR_DAMAGE
+  MAJOR_DAMAGE
+  LOST
+}
+
+enum EventCategory {
+  ANAK
+  SAINS
+  KLUB_BUKU
+  MENULIS
+  DONGENG
+  UMUM
+}
+
+enum EventFeeType {
+  FREE
+  INFAQ
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum TicketStatus {
+  REGISTERED
+  CHECKED_IN
+  CANCELLED
+}
+
+enum VolunteerApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ShiftType {
+  SHIFT_PAGI
+  SHIFT_SIANG
+  SHIFT_SORE
+  SHIFT_MALAM
+}
+
+enum ShiftApprovalStatus {
+  ONGOING
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum PaymentMethod {
+  QRIS
+  BANK_MANDIRI
+  BANK_BCA
+  GOPAY
+  OVO
+  DANA
+  SHOPEEPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum BookDonationDeliveryMethod {
+  DROP_OFF
+  COURIER
+}
+
+enum BookDonationStatus {
+  PENDING_CURATION
+  ACCEPTED
+  REJECTED
+}
+
+model User {
+  id            String     @id @default(cuid())
+  memberCode    String     @unique
+  name          String
+  email         String     @unique
+  password      String
+  phone         String?
+  rtRw          String?
+  avatar        String?
+  role          Role       @default(MEMBER)
+  status        UserStatus @default(ACTIVE)
+  points        Int        @default(0)
+  readingTarget Int        @default(20)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  reservations         BookReservation[]
+  loans                BookLoan[]
+  bookmarks            BookBookmark[]
+  eventRegistrations   EventRegistration[]
+  volunteerApplication VolunteerApplication?
+  volunteerShifts      VolunteerShift[]
+  shiftNotes           ShiftHandoverNote[]
+  financialDonations   FinancialDonation[]
+  bookDonations        PhysicalBookDonation[]
+  auditLogs            AuditLog[]
+}
+
+model Book {
+  id             String       @id @default(cuid())
+  bookCode       String       @unique
+  isbn           String?      @unique
+  title          String
+  slug           String       @unique
+  author         String
+  publisher      String?
+  publishYear    Int?
+  category       BookCategory
+  synopsis       String?      @db.Text
+  coverImage     String?
+  shelfLocation  String
+  totalStock     Int          @default(1)
+  availableStock Int          @default(1)
+  rating         Decimal      @default(5.0) @db.Decimal(3, 2)
+  borrowCount    Int          @default(0)
+  status         BookStatus   @default(AVAILABLE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  reservations BookReservation[]
+  loans        BookLoan[]
+  bookmarks    BookBookmark[]
+}
+
+model BookBookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+}
+
+model BookReservation {
+  id              String            @id @default(cuid())
+  reservationCode String            @unique
+  userId          String
+  bookId          String
+  pickupCounter   String            @default("Loket Sirkulasi A-2")
+  expiresAt       DateTime
+  status          ReservationStatus @default(READY_FOR_PICKUP)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  loan BookLoan?
+}
+
+model BookLoan {
+  id              String         @id @default(cuid())
+  loanCode        String         @unique
+  userId          String
+  bookId          String
+  reservationId   String?        @unique
+  processedById   String?
+  returnedById    String?
+  borrowedAt      DateTime       @default(now())
+  dueDate         DateTime
+  returnedAt      DateTime?
+  extendedCount   Int            @default(0)
+  returnCondition BookCondition?
+  fineAmount      Decimal        @default(0) @db.Decimal(12, 2)
+  notes           String?
+  reminderSentAt  DateTime?
+  status          LoanStatus     @default(BORROWED)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book        Book             @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  reservation BookReservation? @relation(fields: [reservationId], references: [id])
+}
+
+model CommunityEvent {
+  id              String        @id @default(cuid())
+  title           String
+  slug            String        @unique
+  description     String        @db.Text
+  category        EventCategory
+  facilitatorName String
+  location        String        @default("Saung Baca Rete Mali, Jatirangga")
+  eventDate       DateTime
+  startTime       String
+  endTime         String
+  quota           Int
+  registeredCount Int           @default(0)
+  feeType         EventFeeType  @default(FREE)
+  infaqAmount     Decimal       @default(0) @db.Decimal(12, 2)
+  materialsNote   String?
+  bannerImage     String?
+  isFeatured      Boolean       @default(false)
+  status          EventStatus   @default(PUBLISHED)
+  reportSummary   String?       @db.Text
+  reportApproved  Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  registrations EventRegistration[]
+}
+
+model EventRegistration {
+  id          String       @id @default(cuid())
+  ticketCode  String       @unique
+  eventId     String
+  userId      String
+  checkedInAt DateTime?
+  checkedInBy String?
+  status      TicketStatus @default(REGISTERED)
+  createdAt   DateTime     @default(now())
+
+  event CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+}
+
+model VolunteerApplication {
+  id            String                     @id @default(cuid())
+  userId        String                     @unique
+  majorOrJob    String
+  institution   String
+  division      String
+  motivation    String                     @db.Text
+  cvDocument    String?
+  status        VolunteerApplicationStatus @default(PENDING)
+  reviewedById  String?
+  reviewedAt    DateTime?
+  rejectionNote String?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VolunteerShift {
+  id             String              @id @default(cuid())
+  userId         String
+  shiftType      ShiftType
+  location       String              @default("RT 05 RW 14 Jatirangga • Pos Utama")
+  taskSummary    String?
+  clockInAt      DateTime            @default(now())
+  clockOutAt     DateTime?
+  durationHours  Decimal?            @db.Decimal(5, 2)
+  approvalStatus ShiftApprovalStatus @default(ONGOING)
+  approvedById   String?
+  approvedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ShiftHandoverNote {
+  id        String    @id @default(cuid())
+  userId    String
+  shiftType ShiftType
+  tags      String[]
+  content   String    @db.Text
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DonationCampaign {
+  id              String   @id @default(cuid())
+  title           String
+  targetAmount    Decimal  @db.Decimal(14, 2)
+  collectedAmount Decimal  @default(0) @db.Decimal(14, 2)
+  auditReportPdf  String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  donations FinancialDonation[]
+}
+
+model FinancialDonation {
+  id            String        @id @default(cuid())
+  receiptCode   String        @unique
+  campaignId    String?
+  userId        String?
+  donorName     String
+  donorEmail    String?
+  isAnonymous   Boolean       @default(false)
+  amount        Decimal       @db.Decimal(14, 2)
+  purposeLabel  String?
+  paymentMethod PaymentMethod
+  isRecurring   Boolean       @default(false)
+  proofImage    String?
+  paymentStatus PaymentStatus @default(PENDING)
+  verifiedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  campaign DonationCampaign? @relation(fields: [campaignId], references: [id])
+  user     User?             @relation(fields: [userId], references: [id])
+}
+
+model PhysicalBookDonation {
+  id             String                     @id @default(cuid())
+  batchCode      String                     @unique
+  userId         String?
+  donorName      String
+  donorBadge     String?
+  isAnonymous    Boolean                    @default(false)
+  packageTitle   String
+  totalBooks     Int
+  conditionNote  String
+  conditionImage String?
+  deliveryMethod BookDonationDeliveryMethod @default(DROP_OFF)
+  status         BookDonationStatus         @default(PENDING_CURATION)
+  curatedById    String?
+  curatedAt      DateTime?
+  curationNote   String?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?
+  title       String
+  description String
+  category    String
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+}
