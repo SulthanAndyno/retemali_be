@@ -97,12 +97,3 @@ Jalankan pengujian otomatis E2E (End-to-End) untuk memastikan seluruh 48 endpoin
 npm run test:e2e
 ```
 
----
-
-## 📑 Dokumentasi API & Integrasi Frontend
-
-Dokumentasi lengkap dan file testing tersimpan di folder `docs/`:
-- **Spesifikasi Endpoint**: [docs/RETEMALI_BACKEND_ENDPOINT.pdf](docs/RETEMALI_BACKEND_ENDPOINT.pdf)
-- **Product Requirement Document (PRD)**: [docs/PRD_RETEMALI_BACKEND.pdf](docs/PRD_RETEMALI_BACKEND.pdf)
-- **Postman Collection**: [docs/Retemali_Backend_Postman_Collection.json](docs/Retemali_Backend_Postman_Collection.json)
-- **Postman Environment**: [docs/Retemali_Postman_Environment.json](docs/Retemali_Postman_Environment.json)
