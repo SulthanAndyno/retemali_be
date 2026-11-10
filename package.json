@@ -4,17 +4,19 @@
   "description": "Backend REST API Taman Baca & Komunitas Rete Mali (RT 05 / RW 14 Jatirangga)",
   "main": "src/app.ts",
   "scripts": {
-    "dev": "nodemon",
+    "dev": "tsx watch src/server.ts",
+    "dev:frontend": "npm --prefix frontend run dev",
     "build": "tsc",
-    "start": "node -r tsconfig-paths/register dist/server.js",
-    "test:e2e": "ts-node -r tsconfig-paths/register scripts/run-e2e-tests.ts",
-    "postman:export": "ts-node -r tsconfig-paths/register scripts/generate-postman.ts",
+    "build:frontend": "npm --prefix frontend run build",
+    "start": "tsx src/server.ts",
+    "test:e2e": "tsx scripts/run-e2e-tests.ts",
+    "postman:export": "tsx scripts/generate-postman.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts"
   },
   "prisma": {
-    "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "keywords": [
     "retemali",
