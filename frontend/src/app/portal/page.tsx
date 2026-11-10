@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   User,
@@ -15,7 +16,8 @@ import {
   Sparkles,
   QrCode,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
@@ -24,9 +26,23 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function PortalPage() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [onProgressToast, setOnProgressToast] = useState(false);
+
+  const handleMemberClick = () => {
+    setOnProgressToast(true);
+    setTimeout(() => setOnProgressToast(false), 3000);
+  };
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-blue-50/50 pb-24 text-slate-800">
+      {/* Toast Notification for On Progress */}
+      {onProgressToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold bg-amber-600 text-white flex items-center gap-2 animate-in fade-in duration-200">
+          <AlertCircle size={15} />
+          <span>Dashboard Member sedang dalam tahap pengembangan (On Progress).</span>
+        </div>
+      )}
+
       <Header title="Portal Peran" subtitle="Pusat Navigasi & Akun" />
 
       <main className="px-4 pt-3 space-y-4">
@@ -53,33 +69,55 @@ export default function PortalPage() {
               </div>
             </section>
 
-            {/* Role Dashboards Nav */}
+            {/* Role Dashboards Nav: Disesuaikan Khusus dengan Role User */}
             <section className="bg-white rounded-2xl p-4 shadow-sm border border-blue-100/70 space-y-2">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                Akses Dashboard
+                Akses Dashboard ({user.role})
               </h3>
 
-              {/* Member Dashboard */}
-              <button
-                onClick={() => router.push('/dashboard/member')}
-                className="w-full p-3 rounded-xl bg-blue-50/60 hover:bg-blue-100/80 text-left flex items-center justify-between transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center">
-                    <User size={18} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-900">Dashboard Member</h4>
-                    <p className="text-[11px] text-slate-500">
-                      Kartu digital, buku pinjaman, reservasi, &amp; tiket
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-              </button>
+              {/* Admin Console (Khusus ADMIN) */}
+              {user.role === 'ADMIN' && (
+                <>
+                  <button
+                    onClick={() => router.push('/dashboard/admin')}
+                    className="w-full p-3 rounded-xl bg-indigo-50/60 hover:bg-indigo-100/80 text-left flex items-center justify-between transition-colors group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-indigo-700 text-white flex items-center justify-center">
+                        <Shield size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Dashboard Administrator</h4>
+                        <p className="text-[11px] text-slate-500">
+                          Pusat kendali 4 KPI, kurasi relawan, sirkulasi, &amp; audit
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
 
-              {/* Volunteer Operational */}
-              {(user.role === 'VOLUNTEER' || user.role === 'ADMIN') && (
+                  <button
+                    onClick={() => router.push('/dashboard/volunteer')}
+                    className="w-full p-3 rounded-xl bg-teal-50/60 hover:bg-teal-100/80 text-left flex items-center justify-between transition-colors group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-teal-700 text-white flex items-center justify-center">
+                        <HeartHandshake size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Meja Operasional Relawan</h4>
+                        <p className="text-[11px] text-slate-500">
+                          Shift presensi, sirkulasi barcode cepat, &amp; donasi
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                </>
+              )}
+
+              {/* Volunteer Operational (Khusus VOLUNTEER) */}
+              {user.role === 'VOLUNTEER' && (
                 <button
                   onClick={() => router.push('/dashboard/volunteer')}
                   className="w-full p-3 rounded-xl bg-teal-50/60 hover:bg-teal-100/80 text-left flex items-center justify-between transition-colors group"
@@ -99,20 +137,27 @@ export default function PortalPage() {
                 </button>
               )}
 
-              {/* Admin Console */}
-              {user.role === 'ADMIN' && (
+              {/* Member: Ditandai "On Progress" sesuai arahan revisi */}
+              {(user.role === 'MEMBER' || user.role === 'DONOR') && (
                 <button
-                  onClick={() => router.push('/dashboard/admin')}
-                  className="w-full p-3 rounded-xl bg-indigo-50/60 hover:bg-indigo-100/80 text-left flex items-center justify-between transition-colors group"
+                  onClick={handleMemberClick}
+                  className="w-full p-3 rounded-xl bg-amber-50/60 hover:bg-amber-100/80 text-left flex items-center justify-between transition-colors group border border-amber-200/60"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-indigo-700 text-white flex items-center justify-center">
-                      <Shield size={18} />
+                    <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+                      <User size={18} />
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900">Dashboard Administrator</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-slate-900">
+                          Dashboard Member
+                        </h4>
+                        <span className="text-[9px] font-bold bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full">
+                          On Progress
+                        </span>
+                      </div>
                       <p className="text-[11px] text-slate-500">
-                        Pusat kendali 4 KPI, kurasi relawan, sirkulasi, &amp; audit
+                        Desain antarmuka dashboard sedang dalam tahap pengembangan
                       </p>
                     </div>
                   </div>

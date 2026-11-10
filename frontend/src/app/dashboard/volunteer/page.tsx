@@ -23,6 +23,7 @@ import {
   Send,
   Plus
 } from 'lucide-react';
+import Header from '@/components/layout/Header';
 import { get, post, patch } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -309,30 +310,8 @@ export default function VolunteerDashboardPage() {
         </div>
       )}
 
-      {/* Top Header */}
-      <header className="bg-white px-4 py-3 shadow-xs flex items-center justify-between sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/')}
-            className="p-1.5 -ml-1.5 rounded-full hover:bg-slate-100 text-slate-700"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-sm font-bold text-slate-900 leading-tight">Operasional Relawan</h1>
-            <p className="text-[11px] text-slate-500 leading-tight">Rete Mali Community</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100">
-            <HelpCircle size={19} />
-          </button>
-          <div className="w-8 h-8 rounded-full bg-blue-100 border border-blue-200 text-blue-700 text-xs font-bold flex items-center justify-center">
-            {user?.name ? user.name.slice(0, 2).toUpperCase() : 'RL'}
-          </div>
-        </div>
-      </header>
+      {/* Universal Top Header with Side Panel Drawer */}
+      <Header title="Operasional Relawan" subtitle="Presensi & Sirkulasi Cepat" showBack />
 
       <main className="px-4 pt-3 space-y-3.5">
         {/* Active Shift Card */}

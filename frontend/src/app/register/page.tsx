@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BookOpen, Loader2, CheckCircle, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import Header from '@/components/layout/Header';
 import { post } from '@/lib/api';
 
 interface RegisterResponse {
@@ -103,22 +104,8 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-blue-50 pb-10">
-      <div className="max-w-md mx-auto px-4 pt-8">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => router.back()}
-            className="w-9 h-9 flex items-center justify-center rounded-xl bg-white shadow-sm text-gray-600 hover:bg-gray-50"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <BookOpen size={16} className="text-white" />
-            </div>
-            <span className="font-bold text-gray-900">ReteMali</span>
-          </div>
-        </div>
+      <Header title="Daftar Anggota" showBack />
+      <div className="max-w-md mx-auto px-4 pt-4">
 
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Daftar Anggota Baru</h1>

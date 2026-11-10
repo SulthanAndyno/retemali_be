@@ -4,9 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
-  Menu,
-  Bell,
-  User,
   Search,
   MapPin,
   Calendar,
@@ -15,15 +12,13 @@ import {
   Heart,
   ChevronRight,
   QrCode,
-  X,
   ExternalLink,
   MessageSquare,
   Mail,
   Camera,
-  Clock,
-  Sparkles,
   Bookmark
 } from 'lucide-react';
+import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
 import { get } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,8 +42,6 @@ export default function HomePage() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const [mounted, setMounted] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState('Semua');
   const [searchQuery, setSearchQuery] = useState('');
   const [bookCount, setBookCount] = useState(3450);
@@ -90,8 +83,6 @@ export default function HomePage() {
   ]);
 
   useEffect(() => {
-    setMounted(true);
-
     const loadPublicData = async () => {
       try {
         const res = await get<{
@@ -128,130 +119,8 @@ export default function HomePage() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-blue-50/50 pb-24 text-slate-800 relative">
-      {/* Top Header matching UI */}
-      <header className="bg-white px-4 py-3 shadow-xs sticky top-0 z-40 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setMenuOpen(true)}
-            className="p-1 -ml-1 text-slate-700 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition-colors"
-            aria-label="Menu"
-          >
-            <Menu size={22} />
-          </button>
-          <div>
-            <h1 className="text-sm font-extrabold text-slate-900 leading-tight">Rete Mali</h1>
-            <p className="text-[10px] text-slate-500 leading-tight">Taman Baca &amp; Komunitas</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            className="p-2 text-slate-600 hover:text-blue-600 rounded-full hover:bg-slate-100 relative transition-colors"
-            aria-label="Notifikasi"
-          >
-            <Bell size={18} />
-            <span className="w-2 h-2 rounded-full bg-blue-600 absolute top-1.5 right-1.5" />
-          </button>
-
-          <button
-            onClick={() => router.push(user ? '/portal' : '/login')}
-            className="w-8 h-8 rounded-full bg-blue-100 border border-blue-200 text-blue-700 text-xs font-bold flex items-center justify-center overflow-hidden"
-            aria-label="Akun"
-          >
-            {user?.name ? user.name.slice(0, 2).toUpperCase() : <User size={15} />}
-          </button>
-        </div>
-      </header>
-
-      {/* Slide-over Navigation Drawer */}
-      {menuOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex">
-          <div className="w-4/5 max-w-xs bg-white h-full shadow-2xl flex flex-col justify-between p-5 animate-in slide-in-from-left duration-200">
-            <div className="space-y-5">
-              {/* Drawer Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
-                    RM
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-900">Rete Mali</h3>
-                    <p className="text-[10px] text-slate-500">Ruang Literasi Warga</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              {/* Main Nav Section */}
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Navigasi Utama
-                </p>
-                {[
-                  { label: 'Beranda', href: '/', icon: BookOpen },
-                  { label: 'Katalog Buku', href: '/katalog', icon: BookOpen },
-                  { label: 'Kegiatan Komunitas', href: '/kegiatan', icon: Users },
-                  { label: 'Donasi & Dukungan', href: '/donasi', icon: Heart },
-                ].map((item) => (
-                  <button
-                    key={item.href}
-                    onClick={() => {
-                      router.push(item.href);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                  >
-                    <item.icon size={16} className="text-blue-600" />
-                    <span>{item.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Role Portals */}
-              <div className="space-y-1 pt-2 border-t border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Portal Peran
-                </p>
-                {[
-                  { label: 'Dashboard Member', href: '/dashboard/member' },
-                  { label: 'Operasional Relawan', href: '/dashboard/volunteer' },
-                  { label: 'Dashboard Admin', href: '/dashboard/admin' },
-                ].map((item) => (
-                  <button
-                    key={item.href}
-                    onClick={() => {
-                      router.push(item.href);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    <span>{item.label}</span>
-                    <ChevronRight size={14} className="text-slate-400" />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Hours card at bottom of drawer */}
-            <div className="bg-blue-50/80 border border-blue-100 rounded-2xl p-3 text-xs">
-              <div className="flex items-center gap-2 text-blue-700 font-bold mb-1">
-                <Clock size={15} />
-                <span>Jam Buka Komunitas</span>
-              </div>
-              <p className="text-[11px] text-slate-600">Selasa – Minggu</p>
-              <p className="text-xs font-bold text-slate-900">09:00 – 18:00 WIB</p>
-            </div>
-          </div>
-
-          <div className="flex-1" onClick={() => setMenuOpen(false)} />
-        </div>
-      )}
+      {/* Universal Top Header with Side Panel Drawer */}
+      <Header />
 
       {/* Main Page Content */}
       <main className="px-4 pt-3 space-y-4">

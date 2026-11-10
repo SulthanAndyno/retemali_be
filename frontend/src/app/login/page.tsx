@@ -14,6 +14,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
+import Header from '@/components/layout/Header';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Role = 'NON_MEMBER' | 'MEMBER' | 'VOLUNTEER' | 'ADMIN';
@@ -86,8 +87,20 @@ export default function LoginPage() {
       router.push('/');
       return;
     }
-    setSelectedRole(prev => (prev === role ? null : role));
+    const nextRole = selectedRole === role ? null : role;
+    setSelectedRole(nextRole);
     setError('');
+
+    if (nextRole === 'ADMIN') {
+      setEmail('admin@retemali.id');
+      setPassword('Password123');
+    } else if (nextRole === 'VOLUNTEER') {
+      setEmail('relawan@retemali.id');
+      setPassword('Password123');
+    } else if (nextRole === 'MEMBER') {
+      setEmail('rifky@retemali.id');
+      setPassword('Password123');
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -112,7 +125,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-blue-50 pb-10">
-      <div className="max-w-md mx-auto px-4 pt-10">
+      <Header title="Masuk Akun" showBack />
+      <div className="max-w-md mx-auto px-4 pt-6">
         {/* Logo & Title */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg">

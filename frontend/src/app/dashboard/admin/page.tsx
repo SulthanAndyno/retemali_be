@@ -22,6 +22,7 @@ import {
   Activity,
   RefreshCw,
 } from 'lucide-react';
+import Header from '@/components/layout/Header';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -234,29 +235,8 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="max-w-md mx-auto pb-10">
-        {/* Header */}
-        <div className="bg-white shadow-sm px-4 py-4 flex items-center justify-between sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="p-2 hover:bg-gray-100 rounded-full transition"
-            >
-              <ArrowLeft size={20} className="text-gray-700" />
-            </button>
-            <div>
-              <p className="font-semibold text-gray-900 text-sm leading-tight">Dashboard Admin</p>
-              <p className="text-xs text-gray-500">Rete Mali Community</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="p-2 hover:bg-gray-100 rounded-full">
-              <HelpCircle size={20} className="text-gray-500" />
-            </button>
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
-              AD
-            </div>
-          </div>
-        </div>
+        {/* Universal Header with Side Panel Drawer */}
+        <Header title="Dashboard Admin" subtitle="Pusat Kendali Operasional" showBack />
 
         <div className="px-4 pt-5 space-y-5">
           {/* Admin Console Header */}

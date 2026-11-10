@@ -51,9 +51,25 @@ export const errorHandler = (
     return;
   }
 
+  // Handle Prisma Database Connection Error (ECONNREFUSED)
+  const isDbConnectionError =
+    (err as any).code === "ECONNREFUSED" ||
+    err.name === "PrismaClientInitializationError" ||
+    err.message?.includes("Can't reach database server");
+
+  if (isDbConnectionError) {
+    console.error("❌ Database Connection Error:", err.message);
+    res.status(503).json({
+      status: "error",
+      message:
+        "Koneksi database PostgreSQL gagal (ECONNREFUSED di port 5432). Pastikan service PostgreSQL sudah berjalan dan konfigurasi DATABASE_URL di .env sudah benar.",
+    });
+    return;
+  }
+
   console.error("Unexpected error:", err);
   res.status(500).json({
     status: "error",
-    message: "Internal server error",
+    message: err.message || "Internal server error",
   });
 };

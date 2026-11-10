@@ -219,7 +219,7 @@ export default function Header({
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                       Portal Peran
                     </p>
-                    <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded-full">
+                    <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
                       {user.role}
                     </span>
                   </div>
@@ -232,7 +232,7 @@ export default function Header({
                           router.push('/dashboard/admin');
                           setDrawerOpen(false);
                         }}
-                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
                           <Shield size={16} className="text-indigo-600" />
@@ -246,7 +246,7 @@ export default function Header({
                           router.push('/dashboard/volunteer');
                           setDrawerOpen(false);
                         }}
-                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-700 transition-colors"
                       >
                         <div className="flex items-center gap-2.5">
                           <HeartHandshake size={16} className="text-teal-600" />
@@ -264,7 +264,7 @@ export default function Header({
                         router.push('/dashboard/volunteer');
                         setDrawerOpen(false);
                       }}
-                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-700 transition-colors"
                     >
                       <div className="flex items-center gap-2.5">
                         <HeartHandshake size={16} className="text-teal-600" />
@@ -275,18 +275,20 @@ export default function Header({
                   )}
 
                   {/* Opsi Member: Ditandai "On Progress" sesuai arahan revisi */}
-                  <button
-                    onClick={handleMemberClick}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors opacity-85"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <UserCheck size={16} className="text-blue-500" />
-                      <span>Dashboard Member</span>
-                    </div>
-                    <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                      On Progress
-                    </span>
-                  </button>
+                  {(user.role === 'MEMBER' || user.role === 'DONOR') && (
+                    <button
+                      onClick={handleMemberClick}
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-amber-50/80 transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <UserCheck size={16} className="text-blue-600" />
+                        <span>Dashboard Member</span>
+                      </div>
+                      <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                        On Progress
+                      </span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
