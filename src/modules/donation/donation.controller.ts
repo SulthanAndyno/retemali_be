@@ -165,4 +165,58 @@ export class DonationController {
       next(error);
     }
   };
+
+  getPaymentSettings = async (
+    _req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const settings = await this.donationService.getPaymentSetting();
+      successResponse({
+        res,
+        message: "Berhasil mengambil pengaturan rekening & QRIS donasi",
+        data: settings,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updatePaymentSettings = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const {
+        bankMandiri,
+        bankMandiriName,
+        bankBca,
+        bankBcaName,
+        qrisNmid,
+        qrisImageUrl,
+      } = req.body;
+
+      const settings = await this.donationService.updatePaymentSetting(
+        {
+          bankMandiri,
+          bankMandiriName,
+          bankBca,
+          bankBcaName,
+          qrisNmid,
+          qrisImageUrl,
+        },
+        req.file,
+      );
+
+      successResponse({
+        res,
+        message: "Pengaturan rekening dan QRIS donasi berhasil diperbarui",
+        data: settings,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

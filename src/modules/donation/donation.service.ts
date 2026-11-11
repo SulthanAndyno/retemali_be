@@ -79,4 +79,29 @@ export class DonationService {
   ) {
     return this.donationRepository.verifyBookDonation(id, curatedById, data);
   }
+
+  async getPaymentSetting() {
+    return this.donationRepository.getPaymentSetting();
+  }
+
+  async updatePaymentSetting(
+    data: {
+      bankMandiri?: string;
+      bankMandiriName?: string;
+      bankBca?: string;
+      bankBcaName?: string;
+      qrisNmid?: string;
+      qrisImageUrl?: string;
+    },
+    file?: Express.Multer.File,
+  ) {
+    const qrisImageUrl = file
+      ? `uploads/donations/${file.filename}`
+      : data.qrisImageUrl;
+
+    return this.donationRepository.updatePaymentSetting({
+      ...data,
+      ...(qrisImageUrl ? { qrisImageUrl } : {}),
+    });
+  }
 }

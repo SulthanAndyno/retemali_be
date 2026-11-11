@@ -15,13 +15,14 @@ import {
   CreditCard,
   Package,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Copy
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
 import { get, post } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getImageUrl } from '@/lib/utils';
 
 interface CampaignSummary {
   campaignTitle?: string;
@@ -53,6 +54,26 @@ export default function DonasiPage() {
   const [financialLoading, setFinancialLoading] = useState(false);
   const [receipt, setReceipt] = useState<string | null>(null);
 
+  // Payment Settings (Mandiri, BCA, QRIS)
+  const [paymentSettings, setPaymentSettings] = useState({
+    bankMandiri: '1234567890',
+    bankMandiriName: 'Yayasan Taman Baca Rete Mali',
+    bankBca: '0987654321',
+    bankBcaName: 'Yayasan Taman Baca Rete Mali',
+    qrisImageUrl: '',
+    qrisNmid: 'ID1024389271649',
+  });
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const handleCopy = (text: string, field: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      showToast('Nomor rekening berhasil disalin!');
+      setTimeout(() => setCopiedField(null), 2500);
+    }
+  };
+
   // Book Donation Form
   const [packageTitle, setPackageTitle] = useState('');
   const [totalBooks, setTotalBooks] = useState<number>(5);
@@ -79,7 +100,20 @@ export default function DonasiPage() {
         // Fallback
       }
     };
+
+    const fetchPaymentSettings = async () => {
+      try {
+        const res = await get<{ data: any }>('/donations/payment-settings');
+        if (res && res.data) {
+          setPaymentSettings(res.data);
+        }
+      } catch {
+        // Fallback to default dummy accounts
+      }
+    };
+
     fetchSummary();
+    fetchPaymentSettings();
   }, []);
 
   const handleFinancialSubmit = async (e: React.FormEvent) => {
@@ -329,18 +363,151 @@ export default function DonasiPage() {
 
             {/* QRIS Visual Preview */}
             {paymentMethod === 'QRIS' && (
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-2">
-                <div className="w-40 h-40 bg-white border border-slate-200 rounded-xl mx-auto flex flex-col items-center justify-center p-2 shadow-xs">
-                  <QrCode size={100} className="text-slate-900" />
-                  <span className="text-[9px] font-bold text-slate-500 tracking-wider uppercase mt-1">
-                    NMID: ID1024389271649
-                  </span>
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-3">
+                {/* Official Style QRIS Card Frame */}
+                <div className="w-56 bg-white border border-slate-300 rounded-2xl mx-auto shadow-sm overflow-hidden text-center">
+                  {/* Top Red QRIS Header */}
+                  <div className="bg-rose-600 px-3 py-1.5 flex items-center justify-between text-white">
+                    <span className="font-black text-sm tracking-widest">QRIS</span>
+                    <span className="text-[9px] font-semibold tracking-tight uppercase">Pembayaran Digital</span>
+                  </div>
+
+                  <div className="p-3 flex flex-col items-center">
+                    <p className="text-[11px] font-extrabold text-slate-900 leading-tight">
+                      TAMAN BACA RETE MALI
+                    </p>
+                    <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+                      NMID: {paymentSettings.qrisNmid || 'ID1024389271649'}
+                    </p>
+
+                    {/* The QR Image */}
+                    <div className="w-44 h-44 my-2 bg-white flex items-center justify-center p-1 rounded-xl border border-slate-100">
+                      <img
+                        src={
+                          paymentSettings.qrisImageUrl
+                            ? getImageUrl(paymentSettings.qrisImageUrl)
+                            : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=00020101021126580014ID.LINKAJA.WWW01189360001000000000000215${paymentSettings.qrisNmid || 'ID1024389271649'}51440014ID.CO.QRIS.WWW0215${paymentSettings.qrisNmid || 'ID1024389271649'}5204581253033605802ID5927TAMAN%20BACA%20RETE%20MALI6006BEKASI`
+                        }
+                        alt="QRIS Barcode Donasi Rete Mali"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+
+                    <span className="text-[9px] text-slate-400 font-medium">
+                      Dicetak oleh: GPN / ASPI
+                    </span>
+                  </div>
                 </div>
+
                 <p className="text-[11px] font-bold text-slate-800">
                   Yayasan Taman Baca Rete Mali Jatirangga
                 </p>
                 <p className="text-[10px] text-slate-500">
                   Pindai menggunakan GoPay, OVO, Dana, ShopeePay, BCA Mobile, atau Livin Mandiri.
+                </p>
+              </div>
+            )}
+
+            {/* Bank Mandiri Dummy Account Display */}
+            {paymentMethod === 'BANK_MANDIRI' && (
+              <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-black text-xs flex items-center justify-center">
+                      BM
+                    </div>
+                    <div>
+                      <p className="font-bold text-xs text-blue-950">Bank Mandiri</p>
+                      <p className="text-[10px] text-slate-500">Transfer Antar Bank / VA</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
+                    Online 24 Jam
+                  </span>
+                </div>
+
+                <div className="bg-white border border-blue-100 rounded-xl p-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-medium">Nomor Rekening Mandiri:</span>
+                    <span className="font-mono font-extrabold text-sm text-slate-900 tracking-wider">
+                      {paymentSettings.bankMandiri || '1234567890'}
+                    </span>
+                    <span className="text-[11px] text-slate-600 block mt-0.5">
+                      a.n. {paymentSettings.bankMandiriName || 'Yayasan Taman Baca Rete Mali'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(paymentSettings.bankMandiri || '1234567890', 'mandiri')}
+                    className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                  >
+                    {copiedField === 'mandiri' ? (
+                      <>
+                        <CheckCircle2 size={13} className="text-emerald-600" />
+                        <span className="text-emerald-700">Tersalin</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={13} />
+                        <span>Salin</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 text-center">
+                  Sertakan berita transfer: <span className="font-semibold text-slate-700">Donasi Rete Mali</span>
+                </p>
+              </div>
+            )}
+
+            {/* Bank BCA Dummy Account Display */}
+            {paymentMethod === 'BANK_BCA' && (
+              <div className="bg-sky-50/70 border border-sky-200 rounded-2xl p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-sky-600 text-white font-black text-xs flex items-center justify-center">
+                      BCA
+                    </div>
+                    <div>
+                      <p className="font-bold text-xs text-sky-950">Bank Central Asia (BCA)</p>
+                      <p className="text-[10px] text-slate-500">Transfer Antar Bank / Kliring</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-full">
+                    Online 24 Jam
+                  </span>
+                </div>
+
+                <div className="bg-white border border-sky-100 rounded-xl p-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-medium">Nomor Rekening BCA:</span>
+                    <span className="font-mono font-extrabold text-sm text-slate-900 tracking-wider">
+                      {paymentSettings.bankBca || '0987654321'}
+                    </span>
+                    <span className="text-[11px] text-slate-600 block mt-0.5">
+                      a.n. {paymentSettings.bankBcaName || 'Yayasan Taman Baca Rete Mali'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(paymentSettings.bankBca || '0987654321', 'bca')}
+                    className="p-2 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                  >
+                    {copiedField === 'bca' ? (
+                      <>
+                        <CheckCircle2 size={13} className="text-emerald-600" />
+                        <span className="text-emerald-700">Tersalin</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={13} />
+                        <span>Salin</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 text-center">
+                  Sertakan berita transfer: <span className="font-semibold text-slate-700">Donasi Rete Mali</span>
                 </p>
               </div>
             )}

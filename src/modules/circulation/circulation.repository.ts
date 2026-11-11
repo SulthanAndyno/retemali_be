@@ -385,11 +385,17 @@ export class CirculationRepository {
   }
 
   /**
-   * Mengambil daftar pinjaman milik user tertentu.
+   * Mengambil daftar pinjaman milik user tertentu (dapat difilter berdasarkan LoanStatus).
    */
-  async findLoansByUser(userId: string): Promise<BookLoan[]> {
+  async findLoansByUser(
+    userId: string,
+    status?: LoanStatus,
+  ): Promise<BookLoan[]> {
     return this.prisma.bookLoan.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(status ? { status } : {}),
+      },
       include: { book: true },
       orderBy: { borrowedAt: "desc" },
     });

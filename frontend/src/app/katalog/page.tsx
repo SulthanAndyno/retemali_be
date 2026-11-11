@@ -20,11 +20,15 @@ import {
   Info,
   Clock,
   MapPin,
-  LogIn
+  LogIn,
+  Plus,
+  Edit2,
+  Trash2,
+  Upload
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
-import { get, post } from '@/lib/api';
+import { get, post, patch, del } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { getImageUrl } from '@/lib/utils';
 
@@ -91,14 +95,178 @@ export default function KatalogPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // Book CRUD for Relawan (CRU) & Admin (CRUD)
+  const canManageBook = user?.role === 'ADMIN' || user?.role === 'VOLUNTEER';
+  const canDeleteBook = user?.role === 'ADMIN';
+
+  const [showBookModal, setShowBookModal] = useState(false);
+  const [editingBook, setEditingBook] = useState<BookItem | null>(null);
+  const [bookSubmitting, setBookSubmitting] = useState(false);
+  const [bookDeletingId, setBookDeletingId] = useState<string | null>(null);
+  const [bookCoverFile, setBookCoverFile] = useState<File | null>(null);
+  const [bookCoverPreview, setBookCoverPreview] = useState<string | null>(null);
+
+  const [bookFormData, setBookFormData] = useState({
+    title: '',
+    author: '',
+    category: 'FIKSI_SASTRA',
+    shelfLocation: 'Rak B-04',
+    totalStock: 3,
+    publisher: '',
+    isbn: '',
+    synopsis: '',
+  });
+
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3500);
   };
 
+  const openCreateBookModal = () => {
+    setEditingBook(null);
+    setBookCoverFile(null);
+    setBookCoverPreview(null);
+    setBookFormData({
+      title: '',
+      author: '',
+      category: 'FIKSI_SASTRA',
+      shelfLocation: 'Rak B-04',
+      totalStock: 3,
+      publisher: '',
+      isbn: '',
+      synopsis: '',
+    });
+    setShowBookModal(true);
+  };
+
+  const openEditBookModal = (book: BookItem) => {
+    setEditingBook(book);
+    setBookCoverFile(null);
+    setBookCoverPreview(book.coverImage ? getImageUrl(book.coverImage) : null);
+    setBookFormData({
+      title: book.title || '',
+      author: book.author || '',
+      category: book.category || 'FIKSI_SASTRA',
+      shelfLocation: book.shelfLocation || 'Rak B-04',
+      totalStock: book.totalStock || 1,
+      publisher: book.publisher || '',
+      isbn: book.isbn || '',
+      synopsis: book.synopsis || '',
+    });
+    setShowBookModal(true);
+  };
+
+  const handleBookFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (bookFormData.title.trim().length < 3) {
+      showToast('Judul buku minimal 3 karakter', 'error');
+      return;
+    }
+    if (bookFormData.author.trim().length < 2) {
+      showToast('Nama penulis minimal 2 karakter', 'error');
+      return;
+    }
+    if (!bookFormData.shelfLocation.trim()) {
+      showToast('Lokasi rak wajib diisi', 'error');
+      return;
+    }
+
+    try {
+      setBookSubmitting(true);
+      const formData = new FormData();
+      formData.append('title', bookFormData.title.trim());
+      formData.append('author', bookFormData.author.trim());
+      formData.append('category', bookFormData.category);
+      formData.append('shelfLocation', bookFormData.shelfLocation.trim());
+      formData.append('totalStock', String(bookFormData.totalStock));
+      if (bookFormData.publisher.trim()) formData.append('publisher', bookFormData.publisher.trim());
+      if (bookFormData.isbn.trim()) formData.append('isbn', bookFormData.isbn.trim());
+      if (bookFormData.synopsis.trim()) formData.append('synopsis', bookFormData.synopsis.trim());
+      if (bookCoverFile) formData.append('coverImage', bookCoverFile);
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('retemali_token') : null;
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const url = `${API_URL}/books${editingBook ? `/${editingBook.id}` : ''}`;
+      const res = await fetch(url, {
+        method: editingBook ? 'PATCH' : 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Gagal menyimpan buku');
+      }
+
+      showToast(editingBook ? 'Data buku berhasil diperbarui!' : 'Buku baru berhasil ditambahkan ke katalog!');
+      setShowBookModal(false);
+      setSelectedBook(null);
+      fetchBooks();
+    } catch (err: unknown) {
+      const error = err as Error;
+      showToast(error.message || 'Gagal menyimpan buku', 'error');
+    } finally {
+      setBookSubmitting(false);
+    }
+  };
+
+  const handleDeleteBook = async (book: BookItem) => {
+    if (!confirm(`Hapus buku "${book.title}" (${book.bookCode}) secara permanen dari sistem?`)) {
+      return;
+    }
+    try {
+      setBookDeletingId(book.id);
+      await del(`/books/${book.id}`);
+      showToast(`Buku "${book.title}" berhasil dihapus`);
+      setSelectedBook(null);
+      fetchBooks();
+    } catch (err: unknown) {
+      const error = err as Error;
+      showToast(error.message || 'Gagal menghapus buku', 'error');
+    } finally {
+      setBookDeletingId(null);
+    }
+  };
+
   const fetchBooks = useCallback(async () => {
     try {
       setLoading(true);
+
+      // Jika tab "Sedang Dipinjam" dan user login, prioritaskan menampilkan buku aktif yang dipinjam user
+      if (activeTab === 'BORROWED' && user) {
+        try {
+          const loanRes = await get<{
+            data: Array<{
+              id: string;
+              loanCode: string;
+              dueDate: string;
+              status: string;
+              book: BookItem;
+            }>;
+          }>('/circulation/loans/me?status=BORROWED');
+
+          if (loanRes && loanRes.data && loanRes.data.length > 0) {
+            const userBorrowedBooks: BookItem[] = loanRes.data
+              .filter((l) => l.book && l.status === 'BORROWED')
+              .map((l) => ({
+                ...l.book,
+                status: 'BORROWED',
+                availableStock: 0,
+                synopsis: `Buku ini sedang Anda pinjam (Kode Pinjam: ${l.loanCode}, Jatuh Tempo: ${new Date(l.dueDate).toLocaleDateString('id-ID')}).`,
+              }));
+
+            setBooks(userBorrowedBooks);
+            setTotalBooks(userBorrowedBooks.length);
+            setTotalPages(1);
+            return;
+          }
+        } catch {
+          // Lanjutkan ke query buku umum jika terjadi kendala pada riwayat user
+        }
+      }
+
       let queryParam = `?page=${page}&limit=10`;
       if (searchQuery.trim()) {
         queryParam += `&search=${encodeURIComponent(searchQuery.trim())}`;
@@ -221,7 +389,7 @@ export default function KatalogPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, searchQuery, activeTab, sortBy]);
+  }, [page, searchQuery, activeTab, sortBy, user]);
 
   useEffect(() => {
     fetchBooks();
@@ -283,9 +451,20 @@ export default function KatalogPage() {
       <main className="px-4 pt-3 space-y-4">
         {/* Banner Section: KOLEKSI WARGA */}
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-blue-100/60">
-          <div className="flex items-center gap-1.5 text-blue-600 mb-1">
-            <BookOpen size={16} className="text-blue-600" />
-            <span className="text-xs font-bold tracking-wider uppercase">Koleksi Warga</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-blue-600 mb-1">
+              <BookOpen size={16} className="text-blue-600" />
+              <span className="text-xs font-bold tracking-wider uppercase">Koleksi Warga</span>
+            </div>
+            {canManageBook && (
+              <button
+                onClick={openCreateBookModal}
+                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs transition-colors"
+              >
+                <Plus size={14} />
+                <span>Tambah Buku</span>
+              </button>
+            )}
           </div>
           <h1 className="text-xl font-extrabold text-slate-900 leading-snug">
             Katalog Buku Perpustakaan
@@ -479,7 +658,7 @@ export default function KatalogPage() {
                   </div>
 
                   {/* Action Button */}
-                  <div>
+                  <div className="space-y-1.5">
                     {isAvailable ? (
                       <button
                         onClick={() => setSelectedBook(book)}
@@ -494,6 +673,35 @@ export default function KatalogPage() {
                       >
                         Reservasi
                       </button>
+                    )}
+
+                    {/* Quick Management for Relawan (CRU) & Admin (CRUD) */}
+                    {canManageBook && (
+                      <div className="flex items-center gap-1 pt-1 border-t border-slate-100">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditBookModal(book);
+                          }}
+                          className="flex-1 py-1 px-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1"
+                        >
+                          <Edit2 size={11} className="text-blue-600" />
+                          <span>Edit</span>
+                        </button>
+                        {canDeleteBook && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteBook(book);
+                            }}
+                            disabled={bookDeletingId === book.id}
+                            className="py-1 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1 disabled:opacity-50"
+                          >
+                            <Trash2 size={11} className="text-rose-600" />
+                            <span>{bookDeletingId === book.id ? '...' : 'Hapus'}</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -736,10 +944,218 @@ export default function KatalogPage() {
                 </button>
               )}
 
+              {/* Operasional Buku (Relawan: Edit | Admin: Edit & Hapus) */}
+              {canManageBook && (
+                <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEditBookModal(selectedBook)}
+                    className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Edit2 size={13} className="text-blue-600" />
+                    <span>Edit Data Buku</span>
+                  </button>
+                  {canDeleteBook && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteBook(selectedBook)}
+                      disabled={bookDeletingId === selectedBook.id}
+                      className="py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 size={13} className="text-rose-600" />
+                      <span>{bookDeletingId === selectedBook.id ? 'Menghapus...' : 'Hapus (Admin)'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               <p className="text-[10px] text-center text-slate-400">
                 Peminjaman 100% gratis untuk seluruh warga &amp; komunitas Rete Mali.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal CRUD Buku (Relawan: CRU | Admin: CRUD) */}
+      {showBookModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between border-b pb-3 border-slate-100">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  {editingBook ? 'Edit Data Koleksi Buku' : 'Tambah Buku Baru'}
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {user?.role === 'ADMIN'
+                    ? 'Akses Penuh Administrator (CRUD)'
+                    : 'Akses Operasional Relawan (CRU)'}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowBookModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleBookFormSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Judul Buku *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Filosofi Teras"
+                  value={bookFormData.title}
+                  onChange={(e) => setBookFormData({ ...bookFormData, title: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Penulis *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Henry Manampiring"
+                    value={bookFormData.author}
+                    onChange={(e) => setBookFormData({ ...bookFormData, author: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Kategori Buku *</label>
+                  <select
+                    value={bookFormData.category}
+                    onChange={(e) => setBookFormData({ ...bookFormData, category: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="FIKSI_SASTRA">Fiksi &amp; Sastra</option>
+                    <option value="SAINS_FAKTA">Sains &amp; Fakta</option>
+                    <option value="SEJARAH">Sejarah</option>
+                    <option value="PSIKOLOGI">Psikologi</option>
+                    <option value="EDUKASI_ANAK">Edukasi Anak</option>
+                    <option value="ENSIKLOPEDIA">Ensiklopedia</option>
+                    <option value="KOMIK_EDUKASI">Komik Edukasi</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Lokasi Rak Fisik *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Rak B-04"
+                    value={bookFormData.shelfLocation}
+                    onChange={(e) => setBookFormData({ ...bookFormData, shelfLocation: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Total Stok *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    required
+                    value={bookFormData.totalStock}
+                    onChange={(e) => setBookFormData({ ...bookFormData, totalStock: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Penerbit</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Gramedia"
+                    value={bookFormData.publisher}
+                    onChange={(e) => setBookFormData({ ...bookFormData, publisher: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">ISBN</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: 978602..."
+                    value={bookFormData.isbn}
+                    onChange={(e) => setBookFormData({ ...bookFormData, isbn: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Sinopsis / Ringkasan</label>
+                <textarea
+                  rows={3}
+                  placeholder="Ceritakan ringkasan isi buku, keunggulan bacaan, atau kelompok pembaca yang cocok..."
+                  value={bookFormData.synopsis}
+                  onChange={(e) => setBookFormData({ ...bookFormData, synopsis: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Upload Sampul Buku */}
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">
+                  Upload Gambar Sampul Buku
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl font-bold cursor-pointer transition-colors shadow-2xs">
+                    <Upload size={14} className="text-blue-600" />
+                    <span>Pilih Sampul</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setBookCoverFile(file);
+                          setBookCoverPreview(URL.createObjectURL(file));
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  {bookCoverPreview ? (
+                    <div className="flex items-center gap-2">
+                      <div className="relative w-10 h-14 rounded-md overflow-hidden border border-slate-200 shadow-2xs">
+                        <img src={bookCoverPreview} alt="Preview Sampul" className="w-full h-full object-cover" />
+                      </div>
+                      <span className="text-[11px] text-emerald-600 font-bold">Sampul siap</span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">Belum ada gambar sampul</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBookModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={bookSubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold disabled:opacity-50"
+                >
+                  {bookSubmitting ? 'Menyimpan...' : editingBook ? 'Simpan Perubahan' : 'Tambah ke Katalog'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

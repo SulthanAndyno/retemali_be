@@ -266,4 +266,46 @@ export class DonationRepository {
       });
     });
   }
+
+  async getPaymentSetting() {
+    let setting = await this.prisma.paymentSetting.findUnique({
+      where: { id: "default" },
+    });
+    if (!setting) {
+      setting = await this.prisma.paymentSetting.create({
+        data: {
+          id: "default",
+          bankMandiri: "1234567890",
+          bankMandiriName: "Yayasan Taman Baca Rete Mali",
+          bankBca: "0987654321",
+          bankBcaName: "Yayasan Taman Baca Rete Mali",
+          qrisNmid: "ID1024389271649",
+        },
+      });
+    }
+    return setting;
+  }
+
+  async updatePaymentSetting(data: {
+    bankMandiri?: string;
+    bankMandiriName?: string;
+    bankBca?: string;
+    bankBcaName?: string;
+    qrisImageUrl?: string;
+    qrisNmid?: string;
+  }) {
+    return this.prisma.paymentSetting.upsert({
+      where: { id: "default" },
+      update: data,
+      create: {
+        id: "default",
+        bankMandiri: data.bankMandiri ?? "1234567890",
+        bankMandiriName: data.bankMandiriName ?? "Yayasan Taman Baca Rete Mali",
+        bankBca: data.bankBca ?? "0987654321",
+        bankBcaName: data.bankBcaName ?? "Yayasan Taman Baca Rete Mali",
+        qrisImageUrl: data.qrisImageUrl,
+        qrisNmid: data.qrisNmid ?? "ID1024389271649",
+      },
+    });
+  }
 }

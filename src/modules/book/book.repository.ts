@@ -64,7 +64,17 @@ export class BookRepository {
 
     const where: Record<string, unknown> = {
       ...(category && { category }),
-      ...(status && { status }),
+      ...(status === ("BORROWED" as BookStatus)
+        ? {
+            OR: [
+              { status: "BORROWED" },
+              { availableStock: { lte: 0 } },
+              { loans: { some: { status: "BORROWED" } } },
+            ],
+          }
+        : status
+        ? { status }
+        : {}),
       ...(shelfLocation && {
         shelfLocation: { contains: shelfLocation, mode: "insensitive" },
       }),

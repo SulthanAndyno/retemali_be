@@ -81,4 +81,24 @@ router.patch(
   donationController.verifyBookDonation,
 );
 
+/**
+ * @route   GET /api/donations/payment-settings
+ * @desc    Mengambil informasi rekening bank & QRIS untuk donasi
+ * @access  Public
+ */
+router.get("/payment-settings", donationController.getPaymentSettings);
+
+/**
+ * @route   PATCH /api/donations/payment-settings
+ * @desc    Mengupdate nomor rekening bank & mengupload gambar QRIS baru
+ * @access  Private (Admin)
+ */
+router.patch(
+  "/payment-settings",
+  authenticate,
+  authorizeRoles("ADMIN"),
+  upload.single("qrisImage"),
+  donationController.updatePaymentSettings,
+);
+
 export default router;

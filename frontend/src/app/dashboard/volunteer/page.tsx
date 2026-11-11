@@ -194,11 +194,14 @@ export default function VolunteerDashboardPage() {
   // Quick circulation submission
   const handleCirculationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (circulationTab === 'checkout' && (!memberCode.trim() || !bookCode.trim())) {
+    const cleanMember = memberCode.trim();
+    const cleanBook = bookCode.trim();
+
+    if (circulationTab === 'checkout' && (!cleanMember || !cleanBook)) {
       showToast('Masukkan ID Anggota dan Kode Buku', 'error');
       return;
     }
-    if (circulationTab === 'return' && !bookCode.trim()) {
+    if (circulationTab === 'return' && !cleanBook) {
       showToast('Masukkan Kode Buku yang dikembalikan', 'error');
       return;
     }
@@ -207,17 +210,20 @@ export default function VolunteerDashboardPage() {
       setCirculationLoading(true);
       if (circulationTab === 'checkout') {
         await post('/circulation/quick-checkout', {
-          memberCode: memberCode.trim(),
-          bookCode: bookCode.trim(),
+          memberIdentifier: cleanMember,
+          memberCode: cleanMember,
+          bookIdentifier: cleanBook,
+          bookCode: cleanBook,
         });
-        showToast(`Peminjaman buku ${bookCode} untuk anggota ${memberCode} BERHASIL!`);
+        showToast(`Peminjaman buku ${cleanBook} untuk anggota ${cleanMember} BERHASIL!`);
         setBookCode('');
       } else {
         await post('/circulation/quick-return', {
-          bookCode: bookCode.trim(),
+          bookIdentifier: cleanBook,
+          bookCode: cleanBook,
           returnCondition: 'GOOD',
         });
-        showToast(`Pengembalian buku ${bookCode} berhasil diterima!`);
+        showToast(`Pengembalian buku ${cleanBook} berhasil diterima!`);
         setBookCode('');
       }
       loadDashboard();

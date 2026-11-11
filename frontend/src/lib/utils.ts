@@ -1,4 +1,4 @@
-const UPLOADS_URL = process.env.NEXT_PUBLIC_UPLOADS_URL || 'http://localhost:5000/uploads';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
 
 /**
  * Format a date to Indonesian locale string.
@@ -29,9 +29,13 @@ export function formatCurrency(amount: number): string {
  * Prepend the uploads base URL to a relative path, or return a placeholder.
  */
 export function getImageUrl(path: string | null | undefined): string {
-  if (!path) return '/placeholder-image.png';
+  if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  return `${UPLOADS_URL}/${path.replace(/^\/+/, '')}`;
+  const cleanPath = path.replace(/^\/+/, '');
+  if (cleanPath.startsWith('uploads/')) {
+    return `${API_BASE}/${cleanPath}`;
+  }
+  return `${API_BASE}/uploads/${cleanPath}`;
 }
 
 /**

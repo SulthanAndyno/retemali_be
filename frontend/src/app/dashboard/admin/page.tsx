@@ -21,8 +21,14 @@ import {
   Square,
   Activity,
   RefreshCw,
+  Upload,
+  CreditCard,
+  Save,
+  QrCode,
+  Image as ImageIcon
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
+import { getImageUrl } from '@/lib/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -134,26 +140,94 @@ export default function AdminDashboardPage() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [approveAllLoading, setApproveAllLoading] = useState(false);
 
+  // Payment Settings (Mandiri, BCA, QRIS)
+  const [paymentSettings, setPaymentSettings] = useState({
+    bankMandiri: '1234567890',
+    bankMandiriName: 'Yayasan Taman Baca Rete Mali',
+    bankBca: '0987654321',
+    bankBcaName: 'Yayasan Taman Baca Rete Mali',
+    qrisNmid: 'ID1024389271649',
+    qrisImageUrl: '',
+  });
+  const [qrisFile, setQrisFile] = useState<File | null>(null);
+  const [qrisPreview, setQrisPreview] = useState<string | null>(null);
+  const [savingPayment, setSavingPayment] = useState(false);
+
   const addToast = (message: string, type: 'success' | 'error') => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   };
 
+  const handleQrisFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setQrisFile(file);
+      const url = URL.createObjectURL(file);
+      setQrisPreview(url);
+    }
+  };
+
+  const handleSavePaymentSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingPayment(true);
+    try {
+      const token = getToken();
+      const formData = new FormData();
+      formData.append('bankMandiri', paymentSettings.bankMandiri);
+      formData.append('bankMandiriName', paymentSettings.bankMandiriName);
+      formData.append('bankBca', paymentSettings.bankBca);
+      formData.append('bankBcaName', paymentSettings.bankBcaName);
+      formData.append('qrisNmid', paymentSettings.qrisNmid);
+      if (qrisFile) {
+        formData.append('qrisImage', qrisFile);
+      }
+
+      const res = await fetch(`${API_URL}/donations/payment-settings`, {
+        method: 'PATCH',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Gagal menyimpan pengaturan rekening');
+      }
+
+      const updated = await res.json();
+      if (updated.data) {
+        setPaymentSettings(updated.data);
+      }
+      setQrisFile(null);
+      addToast('Nomor rekening dan QRIS donasi berhasil disimpan!', 'success');
+    } catch (err: unknown) {
+      const error = err as Error;
+      addToast(error.message || 'Gagal menyimpan pengaturan rekening', 'error');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashData, appsData, shiftsData, logsData] = await Promise.allSettled([
+      const [dashData, appsData, shiftsData, logsData, payData] = await Promise.allSettled([
         apiFetch<AdminStats>('/dashboard/admin'),
         apiFetch<VolunteerApplication[]>('/volunteers/applications'),
         apiFetch<PendingShift[]>('/volunteers/shifts?status=PENDING_APPROVAL'),
         apiFetch<AuditLog[]>('/audit-logs?limit=5'),
+        apiFetch<{ data: typeof paymentSettings }>('/donations/payment-settings'),
       ]);
 
       if (dashData.status === 'fulfilled') setStats(dashData.value);
       if (appsData.status === 'fulfilled') setApplications(appsData.value);
       if (shiftsData.status === 'fulfilled') setShifts(shiftsData.value);
       if (logsData.status === 'fulfilled') setAuditLogs(logsData.value);
+      if (payData.status === 'fulfilled' && payData.value?.data) {
+        setPaymentSettings(payData.value.data);
+      }
 
       // Mock overdue loans from dashboard data (or use separate endpoint)
       setOverdueLoans([
@@ -456,6 +530,152 @@ export default function AdminDashboardPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Donation Payment Settings Management */}
+          <div className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <div className="flex items-center gap-2">
+                <CreditCard size={18} className="text-blue-600" />
+                <h2 className="font-semibold text-gray-900 text-sm">Pengaturan Rekening &amp; QRIS Donasi</h2>
+              </div>
+              <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
+                Admin Config
+              </span>
+            </div>
+
+            <form onSubmit={handleSavePaymentSettings} className="space-y-3.5 text-xs">
+              {/* Bank Mandiri Fields */}
+              <div className="bg-blue-50/60 p-3 rounded-xl border border-blue-100 space-y-2">
+                <div className="flex items-center gap-1.5 font-bold text-blue-900">
+                  <CreditCard size={14} className="text-blue-600" />
+                  <span>Rekening Bank Mandiri</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-gray-600 block mb-1">Nomor Rekening</label>
+                    <input
+                      type="text"
+                      value={paymentSettings.bankMandiri}
+                      onChange={(e) =>
+                        setPaymentSettings({ ...paymentSettings, bankMandiri: e.target.value })
+                      }
+                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 font-mono font-bold text-gray-800"
+                      placeholder="1234567890"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-gray-600 block mb-1">Atas Nama (a.n.)</label>
+                    <input
+                      type="text"
+                      value={paymentSettings.bankMandiriName}
+                      onChange={(e) =>
+                        setPaymentSettings({ ...paymentSettings, bankMandiriName: e.target.value })
+                      }
+                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-800 font-medium"
+                      placeholder="Yayasan Taman Baca Rete Mali"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bank BCA Fields */}
+              <div className="bg-sky-50/60 p-3 rounded-xl border border-sky-100 space-y-2">
+                <div className="flex items-center gap-1.5 font-bold text-sky-900">
+                  <CreditCard size={14} className="text-sky-600" />
+                  <span>Rekening Bank BCA</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-gray-600 block mb-1">Nomor Rekening</label>
+                    <input
+                      type="text"
+                      value={paymentSettings.bankBca}
+                      onChange={(e) =>
+                        setPaymentSettings({ ...paymentSettings, bankBca: e.target.value })
+                      }
+                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 font-mono font-bold text-gray-800"
+                      placeholder="0987654321"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-gray-600 block mb-1">Atas Nama (a.n.)</label>
+                    <input
+                      type="text"
+                      value={paymentSettings.bankBcaName}
+                      onChange={(e) =>
+                        setPaymentSettings({ ...paymentSettings, bankBcaName: e.target.value })
+                      }
+                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-800 font-medium"
+                      placeholder="Yayasan Taman Baca Rete Mali"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* QRIS Upload & NMID */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-gray-200 space-y-2.5">
+                <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                  <QrCode size={14} className="text-slate-700" />
+                  <span>QRIS Statis &amp; NMID</span>
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-600 block mb-1">Nomor NMID</label>
+                  <input
+                    type="text"
+                    value={paymentSettings.qrisNmid}
+                    onChange={(e) =>
+                      setPaymentSettings({ ...paymentSettings, qrisNmid: e.target.value })
+                    }
+                    className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 font-mono text-gray-800"
+                    placeholder="ID1024389271649"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-gray-600 block mb-1">Upload Gambar QRIS Baru</label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-blue-400 text-blue-700 rounded-lg font-bold cursor-pointer hover:bg-blue-50 transition-colors shadow-2xs">
+                      <Upload size={13} />
+                      <span>Pilih Gambar QRIS</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleQrisFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                    {qrisPreview ? (
+                      <div className="flex items-center gap-2">
+                        <img src={qrisPreview} alt="Preview QRIS" className="w-10 h-10 object-cover rounded border" />
+                        <span className="text-[11px] text-emerald-600 font-bold">File dipilih</span>
+                      </div>
+                    ) : paymentSettings.qrisImageUrl ? (
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={getImageUrl(paymentSettings.qrisImageUrl)}
+                          alt="Current QRIS"
+                          className="w-10 h-10 object-cover rounded border"
+                        />
+                        <span className="text-[10px] text-gray-500">QRIS aktif terpasang</span>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-gray-400">Belum ada file baru dipilih</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={savingPayment}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+              >
+                <Save size={14} />
+                <span>{savingPayment ? 'Menyimpan...' : 'Simpan Pengaturan Rekening & QRIS'}</span>
+              </button>
+            </form>
           </div>
 
           {/* Audit Logs */}

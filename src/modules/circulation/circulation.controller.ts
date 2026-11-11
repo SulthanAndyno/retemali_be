@@ -149,8 +149,10 @@ export class CirculationController {
     next: NextFunction,
   ): Promise<void> => {
     try {
+      const status = req.query["status"] as any;
       const loans = await this.circulationService.getMyLoans(
         req.userId as string,
+        status,
       );
 
       successResponse({

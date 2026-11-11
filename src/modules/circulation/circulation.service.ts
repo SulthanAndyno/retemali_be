@@ -8,6 +8,7 @@ import { CirculationRepository } from "./circulation.repository";
 import {
   CreateReservationInput,
   LoanQueryInput,
+  LoanStatus,
   QuickCheckoutInput,
   QuickReturnInput,
 } from "./circulation.validation";
@@ -65,8 +66,11 @@ export class CirculationService {
     };
   }
 
-  async getMyLoans(userId: string): Promise<BookLoan[]> {
-    return this.circulationRepository.findLoansByUser(userId);
+  async getMyLoans(
+    userId: string,
+    status?: LoanStatus,
+  ): Promise<BookLoan[]> {
+    return this.circulationRepository.findLoansByUser(userId, status);
   }
 
   async extendLoan(id: string, userId: string): Promise<BookLoan> {

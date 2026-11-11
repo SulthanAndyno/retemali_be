@@ -396,3 +396,15 @@ model AuditLog {
 
   actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 }
+
+model PaymentSetting {
+  id              String   @id @default("default")
+  bankMandiri     String   @default("1234567890")
+  bankMandiriName String   @default("Yayasan Taman Baca Rete Mali")
+  bankBca         String   @default("0987654321")
+  bankBcaName     String   @default("Yayasan Taman Baca Rete Mali")
+  qrisImageUrl    String?
+  qrisNmid        String?  @default("ID1024389271649")
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}

@@ -23,50 +23,111 @@ export const createReservationSchema = z.object({
     .default("Loket Sirkulasi A-2"),
 });
 
-export const quickCheckoutSchema = z.object({
-  memberIdentifier: z
-    .string()
-    .min(1, "ID atau Kode Barcode Anggota wajib diisi (contoh: RM-2026-0089)")
-    .trim(),
+export const quickCheckoutSchema = z
+  .object({
+    memberIdentifier: z.string().trim().optional(),
+    memberCode: z.string().trim().optional(),
+    memberId: z.string().trim().optional(),
 
-  bookIdentifier: z
-    .string()
-    .min(1, "Kode Barcode atau ISBN Buku wajib diisi (contoh: BK-FS-0001)")
-    .trim(),
+    bookIdentifier: z.string().trim().optional(),
+    bookCode: z.string().trim().optional(),
+    bookId: z.string().trim().optional(),
 
-  reservationCode: z.string().trim().optional(),
+    reservationCode: z.string().trim().optional(),
 
-  durationDays: z
-    .union([
-      z
-        .string()
-        .regex(/^\d+$/)
-        .transform((v) => parseInt(v, 10)),
-      z.number().int().min(1).max(30),
-    ])
-    .optional()
-    .default(14),
-});
+    durationDays: z
+      .union([
+        z
+          .string()
+          .regex(/^\d+$/)
+          .transform((v) => parseInt(v, 10)),
+        z.number().int().min(1).max(30),
+      ])
+      .optional()
+      .default(14),
+  })
+  .transform((data) => {
+    const memberIdentifier =
+      data.memberIdentifier || data.memberCode || data.memberId;
+    const bookIdentifier =
+      data.bookIdentifier || data.bookCode || data.bookId;
 
-export const quickReturnSchema = z.object({
-  bookIdentifier: z
-    .string()
-    .min(1, "Kode Barcode Buku, ISBN, atau Kode Pinjam wajib diisi")
-    .trim(),
+    if (!memberIdentifier) {
+      throw new z.ZodError([
+        {
+          code: z.ZodIssueCode.custom,
+          path: ["memberIdentifier"],
+          message:
+            "ID atau Kode Barcode Anggota wajib diisi (contoh: RM-2026-0089)",
+        },
+      ]);
+    }
 
-  memberIdentifier: z.string().trim().optional(),
+    if (!bookIdentifier) {
+      throw new z.ZodError([
+        {
+          code: z.ZodIssueCode.custom,
+          path: ["bookIdentifier"],
+          message:
+            "Kode Barcode atau ISBN Buku wajib diisi (contoh: BK-FS-0001)",
+        },
+      ]);
+    }
 
-  returnCondition: z.nativeEnum(BookCondition, {
-    error:
-      "Kondisi buku tidak valid. Pilih: GOOD, MINOR_DAMAGE, MAJOR_DAMAGE, atau LOST",
-  }),
+    return {
+      memberIdentifier,
+      bookIdentifier,
+      reservationCode: data.reservationCode,
+      durationDays: data.durationDays,
+    };
+  });
 
-  notes: z
-    .string()
-    .max(500, "Catatan pengembalian maksimal 500 karakter")
-    .trim()
-    .optional(),
-});
+export const quickReturnSchema = z
+  .object({
+    bookIdentifier: z.string().trim().optional(),
+    bookCode: z.string().trim().optional(),
+    bookId: z.string().trim().optional(),
+
+    memberIdentifier: z.string().trim().optional(),
+    memberCode: z.string().trim().optional(),
+    memberId: z.string().trim().optional(),
+
+    returnCondition: z
+      .nativeEnum(BookCondition, {
+        error:
+          "Kondisi buku tidak valid. Pilih: GOOD, MINOR_DAMAGE, MAJOR_DAMAGE, atau LOST",
+      })
+      .optional()
+      .default(BookCondition.GOOD),
+
+    notes: z
+      .string()
+      .max(500, "Catatan pengembalian maksimal 500 karakter")
+      .trim()
+      .optional(),
+  })
+  .transform((data) => {
+    const bookIdentifier =
+      data.bookIdentifier || data.bookCode || data.bookId;
+
+    if (!bookIdentifier) {
+      throw new z.ZodError([
+        {
+          code: z.ZodIssueCode.custom,
+          path: ["bookIdentifier"],
+          message: "Kode Barcode Buku, ISBN, atau Kode Pinjam wajib diisi",
+        },
+      ]);
+    }
+
+    return {
+      bookIdentifier,
+      memberIdentifier:
+        data.memberIdentifier || data.memberCode || data.memberId,
+      returnCondition: data.returnCondition ?? BookCondition.GOOD,
+      notes: data.notes,
+    };
+  });
 
 export const loanQuerySchema = z.object({
   page: z
