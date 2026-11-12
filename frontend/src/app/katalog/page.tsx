@@ -95,7 +95,8 @@ export default function KatalogPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Book CRUD for Relawan (CRU) & Admin (CRUD)
+  // Admin: CRUD penuh. Relawan: hanya mengubah data buku (tidak boleh menambah koleksi baru).
+  const canCreateBook = user?.role === 'ADMIN';
   const canManageBook = user?.role === 'ADMIN' || user?.role === 'VOLUNTEER';
   const canDeleteBook = user?.role === 'ADMIN';
 
@@ -158,6 +159,10 @@ export default function KatalogPage() {
 
   const handleBookFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingBook && !canCreateBook) {
+      showToast('Hanya admin yang dapat menambahkan koleksi buku baru', 'error');
+      return;
+    }
     if (bookFormData.title.trim().length < 3) {
       showToast('Judul buku minimal 3 karakter', 'error');
       return;
@@ -456,7 +461,7 @@ export default function KatalogPage() {
               <BookOpen size={16} className="text-blue-600" />
               <span className="text-xs font-bold tracking-wider uppercase">Koleksi Warga</span>
             </div>
-            {canManageBook && (
+            {canCreateBook && (
               <button
                 onClick={openCreateBookModal}
                 className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs transition-colors"
@@ -977,7 +982,7 @@ export default function KatalogPage() {
         </div>
       )}
 
-      {/* Modal CRUD Buku (Relawan: CRU | Admin: CRUD) */}
+      {/* Modal CRUD Buku (Relawan: ubah data | Admin: CRUD penuh) */}
       {showBookModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">

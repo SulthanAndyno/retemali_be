@@ -5,7 +5,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
   Menu,
   ArrowLeft,
-  Bell,
   User as UserIcon,
   LogIn,
   LogOut,
@@ -18,11 +17,14 @@ import {
   Shield,
   HeartHandshake,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  ArrowLeftRight
 } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRole } from '@/contexts/RoleContext';
 import { getImageUrl } from '@/lib/utils';
+import NotificationBell from '@/components/layout/NotificationBell';
 
 interface HeaderProps {
   title?: string;
@@ -38,13 +40,40 @@ export default function Header({
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const {
+    activeRole,
+    isVolunteerMode,
+    canSwitchVolunteer,
+    switching: roleSwitching,
+    switchRole,
+  } = useRole();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [onProgressToast, setOnProgressToast] = useState(false);
+  const [roleToast, setRoleToast] = useState<{ message: string; type: 'success' | 'error' } | null>(
+    null
+  );
 
   const handleMemberClick = () => {
     setOnProgressToast(true);
     setTimeout(() => setOnProgressToast(false), 3000);
+  };
+
+  const handleToggleVolunteer = async () => {
+    try {
+      const result = await switchRole(isVolunteerMode ? 'MEMBER' : 'VOLUNTEER');
+      setRoleToast({
+        message: result?.note ?? 'Mode peran berhasil diubah.',
+        type: 'success',
+      });
+      setTimeout(() => setRoleToast(null), 3500);
+    } catch (error) {
+      setRoleToast({
+        message: error instanceof Error ? error.message : 'Gagal mengganti peran.',
+        type: 'error',
+      });
+      setTimeout(() => setRoleToast(null), 3500);
+    }
   };
 
   return (
@@ -54,6 +83,18 @@ export default function Header({
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold bg-amber-600 text-white flex items-center gap-2 animate-in fade-in duration-200">
           <AlertCircle size={15} />
           <span>Dashboard Member sedang dalam tahap pengembangan (On Progress).</span>
+        </div>
+      )}
+
+      {/* Toast Notification for Role Switch */}
+      {roleToast && (
+        <div
+          className={`fixed top-16 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold text-white flex items-center gap-2 ${
+            roleToast.type === 'success' ? 'bg-teal-700' : 'bg-rose-600'
+          }`}
+        >
+          <ArrowLeftRight size={14} />
+          <span>{roleToast.message}</span>
         </div>
       )}
 
@@ -111,13 +152,7 @@ export default function Header({
             {user ? (
               // Jika SUDAH Login: Tampilkan Notifikasi & Avatar Profil
               <>
-                <button
-                  className="p-2 text-slate-600 hover:text-blue-600 rounded-full hover:bg-slate-100 relative transition-colors"
-                  aria-label="Notifikasi"
-                >
-                  <Bell size={18} />
-                  <span className="w-2 h-2 rounded-full bg-blue-600 absolute top-1.5 right-1.5" />
-                </button>
+                <NotificationBell />
 
                 <button
                   onClick={() => router.push('/portal')}
@@ -288,6 +323,40 @@ export default function Header({
                         On Progress
                       </span>
                     </button>
+                  )}
+
+                  {/* Volunteer Role Switch — hanya untuk akun berperan VOLUNTEER */}
+                  {canSwitchVolunteer && (
+                    <div className="mt-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <ArrowLeftRight size={13} className="text-blue-600" />
+                          <span className="text-[11px] font-bold text-slate-800">
+                            Mode Peran Aktif
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                            isVolunteerMode
+                              ? 'bg-teal-100 text-teal-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}
+                        >
+                          {activeRole}
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleToggleVolunteer}
+                        disabled={roleSwitching}
+                        className="w-full py-2 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-60 bg-white border border-teal-300 text-teal-700 hover:bg-teal-50"
+                      >
+                        {roleSwitching
+                          ? 'Mengalihkan...'
+                          : isVolunteerMode
+                            ? 'Keluar dari Mode Relawan'
+                            : 'Masuk Mode Relawan'}
+                      </button>
+                    </div>
                   )}
                 </div>
               )}

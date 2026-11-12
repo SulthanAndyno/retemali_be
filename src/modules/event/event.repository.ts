@@ -146,6 +146,7 @@ export class EventRepository {
   async registerParticipant(
     eventIdOrSlug: string,
     userId: string,
+    paymentProofPath?: string,
   ): Promise<EventRegistration> {
     const event = await this.findByIdOrSlug(eventIdOrSlug);
 
@@ -167,6 +168,16 @@ export class EventRepository {
       throw new AppError("Anda sudah terdaftar pada kegiatan ini", 400);
     }
 
+    // Kegiatan berbayar (INFAQ dengan nominal > 0) wajib melampirkan bukti bayar.
+    const isPaidEvent = event.feeType === "INFAQ" && Number(event.infaqAmount) > 0;
+
+    if (isPaidEvent && !paymentProofPath) {
+      throw new AppError(
+        "Kegiatan ini berbayar. Unggah bukti pembayaran (transfer / QRIS) sebelum mendaftar.",
+        400,
+      );
+    }
+
     const ticketCode = await this.generateTicketCode();
 
     return this.prisma.$transaction(async (tx) => {
@@ -181,9 +192,130 @@ export class EventRepository {
           eventId: event.id,
           userId,
           status: "REGISTERED",
+          paymentProofUrl: isPaidEvent ? (paymentProofPath ?? null) : null,
+          paymentStatus: isPaidEvent ? "PENDING" : null,
         },
         include: {
           event: true,
+        },
+      });
+    });
+  }
+
+  /**
+   * Daftar pendaftar kegiatan untuk meja verifikasi admin.
+   */
+  async findRegistrations(options: {
+    eventId?: string;
+    status?: "PENDING" | "VERIFIED" | "FAILED";
+    paidOnly?: boolean;
+  }) {
+    const where: Record<string, unknown> = {
+      ...(options.eventId && { eventId: options.eventId }),
+      ...(options.status ? { paymentStatus: options.status } : {}),
+      ...(options.paidOnly ? { paymentProofUrl: { not: null } } : {}),
+    };
+
+    return this.prisma.eventRegistration.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            eventDate: true,
+            startTime: true,
+            endTime: true,
+            feeType: true,
+            infaqAmount: true,
+            status: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            memberCode: true,
+            name: true,
+            email: true,
+            phone: true,
+            rtRw: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Verifikasi manual bukti pembayaran peserta kegiatan berbayar oleh admin.
+   */
+  async verifyRegistrationPayment(
+    registrationId: string,
+    status: "VERIFIED" | "FAILED",
+    verifiedById: string,
+    note?: string,
+  ) {
+    const registration = await this.prisma.eventRegistration.findUnique({
+      where: { id: registrationId },
+      include: { event: true, user: true },
+    });
+
+    if (!registration) {
+      throw new AppError("Pendaftaran kegiatan tidak ditemukan", 404);
+    }
+
+    if (!registration.paymentProofUrl) {
+      throw new AppError(
+        "Pendaftaran ini tidak memiliki bukti pembayaran untuk diverifikasi",
+        400,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (status === "FAILED" && registration.status !== "CANCELLED") {
+        await tx.communityEvent.update({
+          where: { id: registration.eventId },
+          data: { registeredCount: { decrement: 1 } },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorId: verifiedById,
+          title:
+            status === "VERIFIED"
+              ? "Verifikasi Pembayaran Kegiatan Disetujui"
+              : "Verifikasi Pembayaran Kegiatan Ditolak",
+          description:
+            status === "VERIFIED"
+              ? `Pembayaran ${registration.user.name} untuk kegiatan "${registration.event.title}" (${registration.ticketCode}) diverifikasi.`
+              : `Pembayaran ${registration.user.name} untuk kegiatan "${registration.event.title}" (${registration.ticketCode}) ditolak.`,
+          category: "EVENT",
+        },
+      });
+
+      return tx.eventRegistration.update({
+        where: { id: registrationId },
+        data: {
+          paymentStatus: status,
+          paymentNote: note ?? null,
+          verifiedById,
+          verifiedAt: new Date(),
+          status: status === "FAILED" ? "CANCELLED" : "REGISTERED",
+        },
+        include: {
+          event: true,
+          user: {
+            select: {
+              id: true,
+              memberCode: true,
+              name: true,
+              email: true,
+              phone: true,
+              rtRw: true,
+            },
+          },
         },
       });
     });
@@ -228,6 +360,47 @@ export class EventRepository {
         event: true,
         user: {
           select: { id: true, memberCode: true, name: true, rtRw: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * Mengambil data presensi (read-only) seluruh kegiatan beserta peserta terdaftar.
+   * Dipakai oleh Laporan Presensi Kegiatan (UI + export Excel).
+   */
+  async findAttendanceReport(options: {
+    eventId?: string;
+    from?: Date;
+    to?: Date;
+  }) {
+    const where: Record<string, unknown> = {
+      ...(options.eventId && { id: options.eventId }),
+      ...((options.from || options.to) && {
+        eventDate: {
+          ...(options.from ? { gte: options.from } : {}),
+          ...(options.to ? { lte: options.to } : {}),
+        },
+      }),
+    };
+
+    return this.prisma.communityEvent.findMany({
+      where,
+      orderBy: { eventDate: "desc" },
+      include: {
+        registrations: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                memberCode: true,
+                name: true,
+                phone: true,
+                rtRw: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
         },
       },
     });

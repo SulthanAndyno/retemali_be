@@ -24,9 +24,17 @@ import {
 } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
-import { get, post, patch, del } from '@/lib/api';
+import { get, patch, del } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatDate, getImageUrl } from '@/lib/utils';
+import { formatCurrency, formatDate, getImageUrl } from '@/lib/utils';
+import {
+  computeEventTimeline,
+  computeQuotaState,
+  TONE_BAR_CLASSES,
+  TONE_CLASSES,
+  type EventPhase,
+  type EventTone,
+} from '@/lib/events';
 
 interface EventItem {
   id: string;
@@ -45,6 +53,19 @@ interface EventItem {
   infaqAmount?: number;
   bannerImage?: string;
   isRegistered?: boolean;
+  status?: string;
+}
+
+interface AutoCloseState {
+  id: string;
+  phase: EventPhase;
+  label: string;
+  isRegistrationOpen: boolean;
+  isAutoClosed: boolean;
+  closedReason: string | null;
+  seatsLeft: number;
+  isQuotaFull: boolean;
+  quotaPercent: number;
 }
 
 const categories = [
@@ -64,11 +85,58 @@ export default function KegiatanPage() {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [registeringId, setRegisteringId] = useState<string | null>(null);
+  const [registerTarget, setRegisterTarget] = useState<EventItem | null>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [autoClose, setAutoClose] = useState<Record<string, AutoCloseState>>({});
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  /**
+   * Server-side timeline evaluation (auto-closing). Falls back silently to the
+   * local `computeEventTimeline` helper if the endpoint is unreachable.
+   */
+  const syncAutoClose = async () => {
+    try {
+      const response = await fetch('/api/events/auto-close', { cache: 'no-store' });
+      if (!response.ok) return;
+      const payload = (await response.json()) as { data?: { events?: AutoCloseState[] } };
+      const map: Record<string, AutoCloseState> = {};
+      (payload.data?.events ?? []).forEach((item) => {
+        map[item.id] = item;
+      });
+      setAutoClose(map);
+    } catch {
+      // Local computation in getEventState keeps the UI correct.
+    }
+  };
+
+  const getEventState = (event: EventItem) => {
+    const local = computeEventTimeline(event);
+    const server = autoClose[event.id];
+
+    return {
+      timeline: server
+        ? {
+            phase: server.phase,
+            label: server.label,
+            isRegistrationOpen: server.isRegistrationOpen,
+            isAutoClosed: server.isAutoClosed,
+            closedReason: server.closedReason,
+          }
+        : {
+            phase: local.phase,
+            label: local.label,
+            isRegistrationOpen: local.isRegistrationOpen,
+            isAutoClosed: local.isAutoClosed,
+            closedReason: local.closedReason,
+          },
+      quota: computeQuotaState(event.quota, event.registeredCount),
+    };
   };
 
   const fetchEvents = async () => {
@@ -138,17 +206,43 @@ export default function KegiatanPage() {
 
   useEffect(() => {
     fetchEvents();
+    syncAutoClose();
   }, []);
 
-  const handleRegister = async (event: EventItem) => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
+  /** Kegiatan berbayar = infaq dengan nominal > 0 (wajib bukti pembayaran). */
+  const isPaidEvent = (event: EventItem) =>
+    event.feeType === 'INFAQ' && Number(event.infaqAmount ?? 0) > 0;
+
+  const submitRegistration = async (event: EventItem, proof?: File) => {
     try {
       setRegisteringId(event.id);
-      await post(`/events/${event.id}/register`);
-      showToast(`Pendaftaran acara "${event.title}" BERHASIL! E-Tiket diterbitkan.`);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('retemali_token') : null;
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+      let body: FormData | undefined;
+      if (proof) {
+        body = new FormData();
+        body.append('paymentProof', proof);
+      }
+
+      const res = await fetch(`${API_URL}/events/${event.id}/register`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body,
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.message || 'Gagal mendaftar acara');
+      }
+
+      const isPending = payload?.data?.paymentStatus === 'PENDING';
+      showToast(
+        isPending
+          ? `Pendaftaran "${event.title}" diterima. Bukti pembayaran menunggu verifikasi admin.`
+          : `Pendaftaran acara "${event.title}" BERHASIL! E-Tiket diterbitkan.`
+      );
       setEvents((prev) =>
         prev.map((e) =>
           e.id === event.id
@@ -156,12 +250,37 @@ export default function KegiatanPage() {
             : e
         )
       );
+      setRegisterTarget(null);
+      setProofFile(null);
+      setProofPreview(null);
     } catch (err: unknown) {
       const error = err as Error;
       showToast(error.message || 'Gagal mendaftar acara', 'error');
     } finally {
       setRegisteringId(null);
     }
+  };
+
+  const handleRegister = (event: EventItem) => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    // Kegiatan berbayar: buka formulir unggah bukti pembayaran terlebih dahulu.
+    if (isPaidEvent(event)) {
+      setProofFile(null);
+      setProofPreview(null);
+      setRegisterTarget(event);
+      return;
+    }
+    void submitRegistration(event);
+  };
+
+  const handleProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProofFile(file);
+    setProofPreview(file.type.startsWith('image/') ? URL.createObjectURL(file) : null);
   };
 
   // Admin CRUD Modal state
@@ -186,6 +305,9 @@ export default function KegiatanPage() {
     feeType: 'FREE' as 'FREE' | 'INFAQ',
     infaqAmount: 0,
   });
+
+  // Admin quota guard: a quota can never be lowered below current registrations.
+  const quotaFloor = editingEvent ? Math.max(1, editingEvent.registeredCount) : 1;
 
   const openCreateModal = () => {
     setEditingEvent(null);
@@ -240,6 +362,17 @@ export default function KegiatanPage() {
     }
     if (!formData.eventDate) {
       showToast('Pilih tanggal kegiatan', 'error');
+      return;
+    }
+    if (!Number.isFinite(formData.quota) || formData.quota < 1) {
+      showToast('Kuota peserta minimal 1 orang', 'error');
+      return;
+    }
+    if (editingEvent && formData.quota < quotaFloor) {
+      showToast(
+        `Kuota tidak boleh kurang dari ${quotaFloor} — sudah ada ${editingEvent.registeredCount} peserta terdaftar`,
+        'error'
+      );
       return;
     }
 
@@ -372,7 +505,8 @@ export default function KegiatanPage() {
         {/* Event List */}
         <div className="space-y-4">
           {filteredEvents.map((event) => {
-            const seatsLeft = Math.max(0, event.quota - event.registeredCount);
+            const { timeline, quota } = getEventState(event);
+            const isClosed = !timeline.isRegistrationOpen;
             return (
               <div
                 key={event.id}
@@ -424,19 +558,58 @@ export default function KegiatanPage() {
                       <span>{event.location}</span>
                     </div>
 
-                    <span className="font-bold text-rose-600">
-                      • Sisa {seatsLeft} Kursi
+                    <span
+                      className={`font-bold ${quota.isFull ? 'text-rose-600' : 'text-slate-600'}`}
+                    >
+                      • {quota.label}
                     </span>
+                  </div>
+
+                  {/* Quota progress + automated-closing state */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-semibold">
+                      <span className="text-slate-600">
+                        {quota.registered} / {quota.quota} peserta terdaftar
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {timeline.isAutoClosed && (
+                          <span className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full font-bold">
+                            Ditutup Otomatis
+                          </span>
+                        )}
+                        <span
+                          className={`px-1.5 py-0.5 rounded-full font-bold ${
+                            TONE_CLASSES[quota.tone as EventTone] ?? 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {quota.isFull ? 'Kuota Penuh' : `${quota.percent}%`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          TONE_BAR_CLASSES[quota.tone as EventTone] ?? 'bg-slate-400'
+                        }`}
+                        style={{ width: `${quota.percent}%` }}
+                      />
+                    </div>
+                    {isClosed && timeline.closedReason && (
+                      <p className="text-[10px] text-slate-500 leading-snug flex items-start gap-1">
+                        <AlertCircle size={11} className="mt-0.5 shrink-0" />
+                        {timeline.closedReason}
+                      </p>
+                    )}
                   </div>
 
                   {/* Register CTA */}
                   <button
                     onClick={() => handleRegister(event)}
-                    disabled={registeringId === event.id || event.isRegistered || seatsLeft === 0}
+                    disabled={registeringId === event.id || event.isRegistered || isClosed || quota.isFull}
                     className={`w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all ${
                       event.isRegistered
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : seatsLeft === 0
+                        : isClosed || quota.isFull
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white'
                     }`}
@@ -452,8 +625,12 @@ export default function KegiatanPage() {
                         <span>
                           {registeringId === event.id
                             ? 'Menerbitkan Tiket...'
-                            : seatsLeft === 0
+                            : isClosed
+                            ? 'Pendaftaran Ditutup'
+                            : quota.isFull
                             ? 'Kuota Habis'
+                            : isPaidEvent(event)
+                            ? `Daftar (Infaq ${formatCurrency(Number(event.infaqAmount ?? 0))})`
                             : 'Daftar Sekarang (Gratis)'}
                         </span>
                       </>
@@ -539,12 +716,29 @@ export default function KegiatanPage() {
                   <label className="font-semibold text-slate-700 block mb-1">Kuota Peserta *</label>
                   <input
                     type="number"
-                    min={1}
+                    min={quotaFloor}
                     required
                     value={formData.quota}
                     onChange={(e) => setFormData({ ...formData, quota: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full bg-slate-50 border rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 ${
+                      formData.quota < quotaFloor
+                        ? 'border-rose-300 focus:ring-rose-500'
+                        : 'border-slate-200 focus:ring-blue-500'
+                    }`}
                   />
+                  {editingEvent && editingEvent.registeredCount > 0 && (
+                    <p
+                      className={`text-[10px] mt-1 leading-snug ${
+                        formData.quota < quotaFloor ? 'text-rose-600 font-semibold' : 'text-slate-500'
+                      }`}
+                    >
+                      {formData.quota < quotaFloor
+                        ? `Kuota tidak boleh di bawah ${quotaFloor} (peserta terdaftar).`
+                        : `${editingEvent.registeredCount} peserta sudah terdaftar. Sisa ${
+                            formData.quota - editingEvent.registeredCount
+                          } kursi.`}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -699,6 +893,103 @@ export default function KegiatanPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pendaftaran Kegiatan Berbayar (wajib bukti pembayaran) */}
+      {registerTarget && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-start justify-between border-b pb-3 border-slate-100">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Pendaftaran Kegiatan Berbayar
+                </h3>
+                <p className="text-[11px] text-slate-500">{registerTarget.title}</p>
+              </div>
+              <button
+                onClick={() => setRegisterTarget(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs space-y-1">
+              <p className="font-bold text-amber-900 flex items-center gap-1.5">
+                <Ticket size={14} />
+                Infaq Peserta: {formatCurrency(Number(registerTarget.infaqAmount ?? 0))}
+              </p>
+              <p className="text-[11px] text-amber-800 leading-snug">
+                Silakan transfer ke rekening/QRIS resmi Rete Mali (lihat halaman Donasi), lalu
+                unggah bukti pembayaran di bawah ini. Pendaftaran akan aktif setelah admin
+                memverifikasi bukti tersebut.
+              </p>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <label className="font-semibold text-slate-700 block">
+                Bukti Pembayaran (JPG, PNG, atau PDF) *
+              </label>
+              <label className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-blue-300 rounded-xl text-blue-700 font-bold bg-blue-50/60 cursor-pointer hover:bg-blue-50 transition-colors">
+                <Upload size={15} />
+                <span>{proofFile ? 'Ganti File' : 'Pilih File Bukti Pembayaran'}</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={handleProofChange}
+                  className="hidden"
+                />
+              </label>
+
+              {proofFile && (
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-2">
+                  {proofPreview ? (
+                    <img
+                      src={proofPreview}
+                      alt="Pratinjau bukti pembayaran"
+                      className="w-10 h-10 rounded object-cover border"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded bg-slate-200 flex items-center justify-center text-slate-500">
+                      <ImageIcon size={16} />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-slate-800 truncate">
+                      {proofFile.name}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      {(proofFile.size / 1024).toFixed(0)} KB
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[10px] text-slate-400">
+                Maksimal 2 MB. Bukti pembayaran disimpan sebagai referensi verifikasi admin.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setRegisterTarget(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => registerTarget && submitRegistration(registerTarget, proofFile ?? undefined)}
+                disabled={!proofFile || registeringId === registerTarget.id}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 size={15} />
+                {registeringId === registerTarget.id ? 'Mengirim...' : 'Kirim & Daftar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

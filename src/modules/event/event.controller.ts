@@ -2,11 +2,14 @@ import { NextFunction, Response } from "express";
 import { paginatedResponse, successResponse } from "../../utils/response";
 import { EventService } from "./event.service";
 import {
+  attendanceReportQuerySchema,
   checkInTicketSchema,
   createEventSchema,
   eventQuerySchema,
+  eventRegistrationQuerySchema,
   submitEventReportSchema,
   updateEventSchema,
+  verifyEventPaymentSchema,
 } from "./event.validation";
 import { AuthRequest } from "@/middlewares/auth.middleware";
 
@@ -31,6 +34,25 @@ export class EventController {
         message: "Berhasil mengambil daftar agenda kegiatan komunitas",
         data,
         meta,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getAttendanceReport = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const query = attendanceReportQuerySchema.parse(req.query);
+      const report = await this.eventService.getAttendanceReport(query);
+
+      successResponse({
+        res,
+        message: "Berhasil mengambil laporan presensi kegiatan",
+        data: report,
       });
     } catch (error) {
       next(error);
@@ -144,13 +166,63 @@ export class EventController {
       const ticket = await this.eventService.registerParticipant(
         eventId,
         req.userId as string,
+        req.file,
       );
 
       successResponse({
         res,
         statusCode: 201,
-        message: "Berhasil mendaftar kegiatan. E-Tiket QR telah diterbitkan",
+        message:
+          ticket.paymentStatus === "PENDING"
+            ? "Pendaftaran diterima. Bukti pembayaran menunggu verifikasi admin"
+            : "Berhasil mendaftar kegiatan. E-Tiket QR telah diterbitkan",
         data: ticket,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getRegistrations = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const query = eventRegistrationQuerySchema.parse(req.query);
+      const report = await this.eventService.getRegistrations(query);
+
+      successResponse({
+        res,
+        message: "Berhasil mengambil daftar pendaftar kegiatan",
+        data: report,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  verifyRegistrationPayment = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const registrationId = req.params["registrationId"] as string;
+      const data = verifyEventPaymentSchema.parse(req.body);
+      const registration = await this.eventService.verifyRegistrationPayment(
+        registrationId,
+        req.userId as string,
+        data,
+      );
+
+      successResponse({
+        res,
+        message:
+          data.status === "VERIFIED"
+            ? "Pembayaran peserta berhasil diverifikasi"
+            : "Pembayaran peserta ditolak dan pendaftaran dibatalkan",
+        data: registration,
       });
     } catch (error) {
       next(error);

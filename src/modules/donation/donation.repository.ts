@@ -174,6 +174,39 @@ export class DonationRepository {
   }
 
   /**
+   * Mengambil daftar transaksi donasi finansial (read-only) untuk Laporan Kas.
+   */
+  async findAllFinancialDonations(options: {
+    skip: number;
+    take: number;
+    status?: string;
+    from?: Date;
+    to?: Date;
+  }) {
+    const where: Record<string, unknown> = {
+      ...(options.status && { paymentStatus: options.status }),
+      ...((options.from || options.to) && {
+        createdAt: {
+          ...(options.from ? { gte: options.from } : {}),
+          ...(options.to ? { lte: options.to } : {}),
+        },
+      }),
+    };
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.financialDonation.findMany({
+        where,
+        skip: options.skip,
+        take: options.take,
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.financialDonation.count({ where }),
+    ]);
+
+    return { data, total };
+  }
+
+  /**
    * Membuat penyerahan Donasi Buku Fisik baru.
    */
   async createBookDonation(
@@ -307,5 +340,127 @@ export class DonationRepository {
         qrisNmid: data.qrisNmid ?? "ID1024389271649",
       },
     });
+  }
+
+  /**
+   * Kanal pembayaran donasi yang bisa diaktifkan/dinonaktifkan satu per satu.
+   * Data lama (PaymentSetting) dipakai sebagai nilai awal saat tabel masih kosong.
+   */
+  private async ensureDefaultPaymentAccounts(): Promise<void> {
+    const total = await this.prisma.paymentAccount.count();
+    if (total > 0) return;
+
+    const legacy = await this.prisma.paymentSetting.findUnique({
+      where: { id: "default" },
+    });
+
+    await this.prisma.paymentAccount.createMany({
+      data: [
+        {
+          type: "QRIS",
+          providerName: "QRIS Statis",
+          accountName: legacy?.bankMandiriName ?? "Yayasan Taman Baca Rete Mali",
+          qrisImageUrl: legacy?.qrisImageUrl ?? null,
+          qrisNmid: legacy?.qrisNmid ?? "ID1024389271649",
+          isActive: true,
+          sortOrder: 0,
+        },
+        {
+          type: "BANK_TRANSFER",
+          providerName: "Bank Mandiri",
+          accountNumber: legacy?.bankMandiri ?? "1234567890",
+          accountName: legacy?.bankMandiriName ?? "Yayasan Taman Baca Rete Mali",
+          isActive: true,
+          sortOrder: 1,
+        },
+        {
+          type: "BANK_TRANSFER",
+          providerName: "Bank BCA",
+          accountNumber: legacy?.bankBca ?? "0987654321",
+          accountName: legacy?.bankBcaName ?? "Yayasan Taman Baca Rete Mali",
+          isActive: true,
+          sortOrder: 2,
+        },
+      ],
+    });
+  }
+
+  async findAllPaymentAccounts(activeOnly: boolean) {
+    await this.ensureDefaultPaymentAccounts();
+
+    return this.prisma.paymentAccount.findMany({
+      where: activeOnly ? { isActive: true } : {},
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    });
+  }
+
+  async findPaymentAccountById(id: string) {
+    const account = await this.prisma.paymentAccount.findUnique({ where: { id } });
+    if (!account) {
+      throw new AppError("Kanal pembayaran tidak ditemukan", 404);
+    }
+    return account;
+  }
+
+  async createPaymentAccount(
+    data: {
+      type: "QRIS" | "BANK_TRANSFER";
+      providerName: string;
+      accountNumber?: string;
+      accountName?: string;
+      qrisNmid?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    },
+    qrisImageUrl?: string,
+  ) {
+    return this.prisma.paymentAccount.create({
+      data: {
+        type: data.type,
+        providerName: data.providerName,
+        accountNumber: data.accountNumber ?? null,
+        accountName: data.accountName ?? null,
+        qrisImageUrl: qrisImageUrl ?? null,
+        qrisNmid: data.type === "QRIS" ? (data.qrisNmid ?? null) : null,
+        isActive: data.isActive ?? true,
+        sortOrder: data.sortOrder ?? 99,
+      },
+    });
+  }
+
+  async updatePaymentAccount(
+    id: string,
+    data: {
+      type?: "QRIS" | "BANK_TRANSFER";
+      providerName?: string;
+      accountNumber?: string;
+      accountName?: string;
+      qrisNmid?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    },
+    qrisImageUrl?: string,
+  ) {
+    await this.findPaymentAccountById(id);
+
+    const updateData: Record<string, unknown> = {};
+    if (data.type !== undefined) updateData.type = data.type;
+    if (data.providerName !== undefined) updateData.providerName = data.providerName;
+    if (data.accountNumber !== undefined) updateData.accountNumber = data.accountNumber;
+    if (data.accountName !== undefined) updateData.accountName = data.accountName;
+    if (data.qrisNmid !== undefined) updateData.qrisNmid = data.qrisNmid;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.sortOrder !== undefined) updateData.sortOrder = data.sortOrder;
+    if (qrisImageUrl !== undefined) updateData.qrisImageUrl = qrisImageUrl;
+
+    return this.prisma.paymentAccount.update({
+      where: { id },
+      data: updateData,
+    });
+  }
+
+  async deletePaymentAccount(id: string) {
+    await this.findPaymentAccountById(id);
+    return this.prisma.paymentAccount.delete({ where: { id } });
   }
 }

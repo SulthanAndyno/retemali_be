@@ -46,12 +46,12 @@ router.post("/:id/bookmark", authenticate, bookmarkController.toggle);
 /**
  * @route   POST /api/books
  * @desc    Menambahkan koleksi buku baru (+ upload coverImage)
- * @access  Private (Admin / Volunteer)
+ * @access  Private (Admin only — relawan tidak boleh menambah koleksi)
  */
 router.post(
   "/",
   authenticate,
-  authorizeRoles("ADMIN", "VOLUNTEER"),
+  authorizeRoles("ADMIN"),
   upload.single("coverImage"),
   bookController.create,
 );

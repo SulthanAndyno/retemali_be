@@ -1,4 +1,5 @@
 import { AppError } from "@/middlewares/error.middleware";
+import type { z } from "zod";
 import {
   buildPaginationMeta,
   parsePagination,
@@ -7,8 +8,11 @@ import { DonationRepository } from "./donation.repository";
 import {
   CreateBookDonationInput,
   CreateFinancialDonationInput,
+  CreatePaymentAccountInput,
   DonationQueryInput,
+  financialDonationQuerySchema,
   PaymentWebhookInput,
+  UpdatePaymentAccountInput,
   VerifyBookDonationInput,
 } from "./donation.validation";
 
@@ -49,6 +53,27 @@ export class DonationService {
     return receipt;
   }
 
+  async getAllFinancialDonations(
+    query: z.infer<typeof financialDonationQuerySchema>,
+  ) {
+    const { skip, take, page, limit } = parsePagination(query);
+
+    const { data, total } = await this.donationRepository.findAllFinancialDonations(
+      {
+        skip,
+        take,
+        status: query.status,
+        from: query.from ? new Date(query.from) : undefined,
+        to: query.to ? new Date(query.to) : undefined,
+      },
+    );
+
+    return {
+      data,
+      meta: buildPaginationMeta(total, page, limit),
+    };
+  }
+
   async createBookDonation(
     data: CreateBookDonationInput,
     file?: Express.Multer.File,
@@ -82,6 +107,39 @@ export class DonationService {
 
   async getPaymentSetting() {
     return this.donationRepository.getPaymentSetting();
+  }
+
+  async getPaymentAccounts(activeOnly: boolean) {
+    return this.donationRepository.findAllPaymentAccounts(activeOnly);
+  }
+
+  async createPaymentAccount(
+    data: CreatePaymentAccountInput,
+    file?: Express.Multer.File,
+  ) {
+    const qrisImageUrl = file
+      ? `uploads/donations/${file.filename}`
+      : undefined;
+    return this.donationRepository.createPaymentAccount(data, qrisImageUrl);
+  }
+
+  async updatePaymentAccount(
+    id: string,
+    data: UpdatePaymentAccountInput,
+    file?: Express.Multer.File,
+  ) {
+    const qrisImageUrl = file
+      ? `uploads/donations/${file.filename}`
+      : undefined;
+    return this.donationRepository.updatePaymentAccount(
+      id,
+      data,
+      qrisImageUrl,
+    );
+  }
+
+  async deletePaymentAccount(id: string) {
+    return this.donationRepository.deletePaymentAccount(id);
   }
 
   async updatePaymentSetting(

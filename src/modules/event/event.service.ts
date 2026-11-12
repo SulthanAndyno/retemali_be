@@ -8,10 +8,13 @@ import {
 } from "../../utils/pagination";
 import { EventRepository } from "./event.repository";
 import {
+  AttendanceReportQueryInput,
   CreateEventInput,
   EventQueryInput,
+  EventRegistrationQueryInput,
   EventStatus,
   UpdateEventInput,
+  VerifyEventPaymentInput,
 } from "./event.validation";
 import { AppError } from "@/middlewares/error.middleware";
 
@@ -105,8 +108,42 @@ export class EventService {
   async registerParticipant(
     eventId: string,
     userId: string,
+    file?: Express.Multer.File,
   ): Promise<EventRegistration> {
-    return this.eventRepository.registerParticipant(eventId, userId);
+    const paymentProofUrl = file
+      ? `uploads/events/${file.filename}`
+      : undefined;
+    return this.eventRepository.registerParticipant(
+      eventId,
+      userId,
+      paymentProofUrl,
+    );
+  }
+
+  async getRegistrations(query: EventRegistrationQueryInput) {
+    const registrations = await this.eventRepository.findRegistrations({
+      eventId: query.eventId,
+      status: query.status,
+      paidOnly: query.paidOnly ?? true,
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      registrations,
+    };
+  }
+
+  async verifyRegistrationPayment(
+    registrationId: string,
+    adminId: string,
+    data: VerifyEventPaymentInput,
+  ) {
+    return this.eventRepository.verifyRegistrationPayment(
+      registrationId,
+      data.status,
+      adminId,
+      data.note,
+    );
   }
 
   async getMyTickets(userId: string): Promise<EventRegistration[]> {
@@ -118,6 +155,39 @@ export class EventService {
     checkedInBy: string,
   ): Promise<EventRegistration> {
     return this.eventRepository.checkInParticipant(ticketCode, checkedInBy);
+  }
+
+  async getAttendanceReport(query: AttendanceReportQueryInput) {
+    const from = query.from ? new Date(query.from) : undefined;
+    const to = query.to ? new Date(query.to) : undefined;
+
+    const events = await this.eventRepository.findAttendanceReport({
+      eventId: query.eventId,
+      from,
+      to,
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      period: {
+        from: from ? from.toISOString() : null,
+        to: to ? to.toISOString() : null,
+      },
+      events: events.map(({ registrations, ...event }) => ({
+        ...event,
+        registrations: registrations.map((registration) => ({
+          id: registration.id,
+          ticketCode: registration.ticketCode,
+          status: registration.status,
+          checkedInAt: registration.checkedInAt,
+          registeredAt: registration.createdAt,
+          memberCode: registration.user.memberCode,
+          memberName: registration.user.name,
+          memberPhone: registration.user.phone,
+          memberRtRw: registration.user.rtRw,
+        })),
+      })),
+    };
   }
 
   async submitEventReport(

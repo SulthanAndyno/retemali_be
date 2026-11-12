@@ -481,15 +481,36 @@ export default function HomePage() {
           </p>
 
           <div className="flex items-center justify-center gap-3 pt-1 text-slate-400">
-            <button className="p-2 rounded-full hover:bg-slate-100 text-slate-600">
+            <a
+              href="https://www.instagram.com/retemali.id"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram Rete Mali"
+              title="Instagram Rete Mali"
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-600"
+            >
               <Camera size={16} />
-            </button>
-            <button className="p-2 rounded-full hover:bg-slate-100 text-slate-600">
+            </a>
+            <a
+              href="https://wa.me/6281234567890?text=Halo%20Admin%20Rete%20Mali%2C%20saya%20ingin%20bertanya%20mengenai%20layanan%20Taman%20Baca%20%26%20Komunitas%20RT%2005%20%2F%20RW%2014."
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="WhatsApp Admin Rete Mali"
+              title="WhatsApp Admin Rete Mali"
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-600"
+            >
               <MessageSquare size={16} />
-            </button>
-            <button className="p-2 rounded-full hover:bg-slate-100 text-slate-600">
+            </a>
+            <a
+              href="mailto:admin@retemali.id"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Email Admin Rete Mali"
+              title="Email Admin Rete Mali"
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-600"
+            >
               <Mail size={16} />
-            </button>
+            </a>
           </div>
 
           <p className="text-[10px] text-slate-400 pt-1">

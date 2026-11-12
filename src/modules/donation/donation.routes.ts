@@ -40,6 +40,18 @@ router.post(
 router.post("/webhook", donationController.webhook);
 
 /**
+ * @route   GET /api/donations/financial
+ * @desc    Daftar transaksi donasi finansial (read-only) untuk Laporan Kas
+ * @access  Private (Admin)
+ */
+router.get(
+  "/financial",
+  authenticate,
+  authorizeRoles("ADMIN"),
+  donationController.getFinancialDonations,
+);
+
+/**
  * @route   GET /api/donations/financial/:receiptCode
  * @desc    Mengambil kuitansi digital donasi finansial
  * @access  Public
@@ -87,6 +99,63 @@ router.patch(
  * @access  Public
  */
 router.get("/payment-settings", donationController.getPaymentSettings);
+
+/**
+ * @route   GET /api/donations/payment-accounts
+ * @desc    Kanal pembayaran donasi (QRIS & rekening bank) yang sedang AKTIF
+ * @access  Public
+ */
+router.get("/payment-accounts", donationController.getPaymentAccounts);
+
+/**
+ * @route   GET /api/donations/payment-accounts/admin
+ * @desc    Seluruh kanal pembayaran donasi (termasuk yang nonaktif) untuk admin
+ * @access  Private (Admin)
+ */
+router.get(
+  "/payment-accounts/admin",
+  authenticate,
+  authorizeRoles("ADMIN"),
+  donationController.getAllPaymentAccounts,
+);
+
+/**
+ * @route   POST /api/donations/payment-accounts
+ * @desc    Menambah kanal pembayaran baru (QRIS / rekening bank) + upload QRIS
+ * @access  Private (Admin)
+ */
+router.post(
+  "/payment-accounts",
+  authenticate,
+  authorizeRoles("ADMIN"),
+  upload.single("qrisImage"),
+  donationController.createPaymentAccount,
+);
+
+/**
+ * @route   PATCH /api/donations/payment-accounts/:id
+ * @desc    Mengubah kanal pembayaran (nomor rekening, a.n., aktif/nonaktif, QRIS)
+ * @access  Private (Admin)
+ */
+router.patch(
+  "/payment-accounts/:id",
+  authenticate,
+  authorizeRoles("ADMIN"),
+  upload.single("qrisImage"),
+  donationController.updatePaymentAccount,
+);
+
+/**
+ * @route   DELETE /api/donations/payment-accounts/:id
+ * @desc    Menghapus kanal pembayaran donasi
+ * @access  Private (Admin)
+ */
+router.delete(
+  "/payment-accounts/:id",
+  authenticate,
+  authorizeRoles("ADMIN"),
+  donationController.deletePaymentAccount,
+);
 
 /**
  * @route   PATCH /api/donations/payment-settings

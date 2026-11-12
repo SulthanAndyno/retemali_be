@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { RoleProvider } from '@/contexts/RoleContext';
+import { NotificationsProvider } from '@/contexts/NotificationsContext';
 
 export const metadata: Metadata = {
   title: 'Rete Mali - Taman Baca & Komunitas',
@@ -16,7 +18,11 @@ export default function RootLayout({
   return (
     <html lang="id">
       <body className="antialiased font-sans">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <RoleProvider>
+            <NotificationsProvider>{children}</NotificationsProvider>
+          </RoleProvider>
+        </AuthProvider>
       </body>
     </html>
   );

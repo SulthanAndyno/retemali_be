@@ -109,6 +109,7 @@ enum PaymentMethod {
   QRIS
   BANK_MANDIRI
   BANK_BCA
+  BANK_TRANSFER
   GOPAY
   OVO
   DANA
@@ -119,6 +120,11 @@ enum PaymentStatus {
   PENDING
   VERIFIED
   FAILED
+}
+
+enum PaymentAccountType {
+  QRIS
+  BANK_TRANSFER
 }
 
 enum BookDonationDeliveryMethod {
@@ -267,14 +273,19 @@ model CommunityEvent {
 }
 
 model EventRegistration {
-  id          String       @id @default(cuid())
-  ticketCode  String       @unique
-  eventId     String
-  userId      String
-  checkedInAt DateTime?
-  checkedInBy String?
-  status      TicketStatus @default(REGISTERED)
-  createdAt   DateTime     @default(now())
+  id              String        @id @default(cuid())
+  ticketCode      String        @unique
+  eventId         String
+  userId          String
+  checkedInAt     DateTime?
+  checkedInBy     String?
+  status          TicketStatus  @default(REGISTERED)
+  paymentProofUrl String?
+  paymentStatus   PaymentStatus?
+  paymentNote     String?
+  verifiedById    String?
+  verifiedAt      DateTime?
+  createdAt       DateTime      @default(now())
 
   event CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -407,4 +418,20 @@ model PaymentSetting {
   qrisNmid        String?  @default("ID1024389271649")
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
+}
+
+/// Payment channels shown on the public donation page.
+/// Each row is one toggleable channel: a single QRIS code or one bank account.
+model PaymentAccount {
+  id            String             @id @default(cuid())
+  type          PaymentAccountType
+  providerName  String
+  accountNumber String?
+  accountName   String?
+  qrisImageUrl  String?
+  qrisNmid      String?
+  isActive      Boolean            @default(true)
+  sortOrder     Int                @default(0)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 }

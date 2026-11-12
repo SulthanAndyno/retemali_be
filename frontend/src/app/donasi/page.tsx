@@ -32,6 +32,18 @@ interface CampaignSummary {
   donorCount: number;
 }
 
+interface PaymentAccount {
+  id: string;
+  type: 'QRIS' | 'BANK_TRANSFER';
+  providerName: string;
+  accountNumber: string | null;
+  accountName: string | null;
+  qrisImageUrl: string | null;
+  qrisNmid: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export default function DonasiPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -49,21 +61,30 @@ export default function DonasiPage() {
   const [donorName, setDonorName] = useState(user?.name || '');
   const [donorEmail, setDonorEmail] = useState(user?.email || '');
   const [purposeLabel, setPurposeLabel] = useState('Peralatan & Rak Ensiklopedia');
-  const [paymentMethod, setPaymentMethod] = useState<'QRIS' | 'BANK_MANDIRI' | 'BANK_BCA'>('QRIS');
+  const [paymentMethod, setPaymentMethod] = useState<'QRIS' | 'BANK_MANDIRI' | 'BANK_BCA' | 'BANK_TRANSFER'>('QRIS');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [financialLoading, setFinancialLoading] = useState(false);
   const [receipt, setReceipt] = useState<string | null>(null);
 
-  // Payment Settings (Mandiri, BCA, QRIS)
-  const [paymentSettings, setPaymentSettings] = useState({
-    bankMandiri: '1234567890',
-    bankMandiriName: 'Yayasan Taman Baca Rete Mali',
-    bankBca: '0987654321',
-    bankBcaName: 'Yayasan Taman Baca Rete Mali',
-    qrisImageUrl: '',
-    qrisNmid: 'ID1024389271649',
-  });
+  // Kanal pembayaran aktif (QRIS & rekening bank) yang diatur admin
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const selectedAccount =
+    paymentAccounts.find((account) => account.id === selectedAccountId) ??
+    paymentAccounts[0] ??
+    null;
+
+  const resolvePaymentMethod = (
+    account: PaymentAccount | null
+  ): 'QRIS' | 'BANK_MANDIRI' | 'BANK_BCA' | 'BANK_TRANSFER' => {
+    if (!account || account.type === 'QRIS') return 'QRIS';
+    const name = account.providerName.toLowerCase();
+    if (name.includes('mandiri')) return 'BANK_MANDIRI';
+    if (name.includes('bca')) return 'BANK_BCA';
+    return 'BANK_TRANSFER';
+  };
 
   const handleCopy = (text: string, field: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -101,19 +122,21 @@ export default function DonasiPage() {
       }
     };
 
-    const fetchPaymentSettings = async () => {
+    const fetchPaymentAccounts = async () => {
       try {
-        const res = await get<{ data: any }>('/donations/payment-settings');
-        if (res && res.data) {
-          setPaymentSettings(res.data);
-        }
+        const res = await get<{ data: PaymentAccount[] }>('/donations/payment-accounts');
+        const accounts = res?.data ?? [];
+        setPaymentAccounts(accounts);
+        setSelectedAccountId((current) => current ?? accounts[0]?.id ?? null);
+        setPaymentMethod(resolvePaymentMethod(accounts[0] ?? null));
       } catch {
-        // Fallback to default dummy accounts
+        // Halaman tetap bisa dipakai; admin belum mengatur kanal pembayaran.
+        setPaymentAccounts([]);
       }
     };
 
     fetchSummary();
-    fetchPaymentSettings();
+    fetchPaymentAccounts();
   }, []);
 
   const handleFinancialSubmit = async (e: React.FormEvent) => {
@@ -126,6 +149,10 @@ export default function DonasiPage() {
       showToast('Masukkan nama donatur atau pilih opsi anonim', 'error');
       return;
     }
+    if (!selectedAccount) {
+      showToast('Belum ada metode pembayaran aktif. Hubungi admin Rete Mali.', 'error');
+      return;
+    }
 
     try {
       setFinancialLoading(true);
@@ -135,7 +162,7 @@ export default function DonasiPage() {
         isAnonymous,
         amount,
         purposeLabel,
-        paymentMethod,
+        paymentMethod: resolvePaymentMethod(selectedAccount),
       });
 
       const code = res?.data?.receiptCode || `INV-RM-${Date.now().toString().slice(-6)}`;
@@ -188,7 +215,7 @@ export default function DonasiPage() {
         </div>
       )}
 
-      <Header title="Donasi & Dukungan" subtitle="Gerakan Gotong Royong Literasi" showBack />
+      <Header title="Donasi & Dukungan" subtitle="Gerakan Gotong Royong Literasi" />
 
       <main className="px-4 pt-3 space-y-4">
         {/* Campaign Progress Card */}
@@ -335,58 +362,71 @@ export default function DonasiPage() {
               )}
             </div>
 
-            {/* Payment Method */}
+            {/* Metode Pembayaran — dinamis dari kanal aktif yang diatur admin */}
             <div className="space-y-2 pt-1 border-t border-slate-100">
               <label className="font-semibold text-slate-700 block">Metode Pembayaran</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'QRIS', label: 'QRIS Statis', sub: 'Semua E-Wallet' },
-                  { id: 'BANK_MANDIRI', label: 'Mandiri', sub: 'Transfer Bank' },
-                  { id: 'BANK_BCA', label: 'BCA', sub: 'Transfer Bank' },
-                ].map((pm) => (
-                  <button
-                    key={pm.id}
-                    type="button"
-                    onClick={() => setPaymentMethod(pm.id as any)}
-                    className={`p-2 rounded-xl text-left border transition-all ${
-                      paymentMethod === pm.id
-                        ? 'bg-blue-50 border-blue-600 text-blue-900 shadow-xs'
-                        : 'bg-slate-50 border-slate-200 text-slate-700'
-                    }`}
-                  >
-                    <p className="font-bold text-xs">{pm.label}</p>
-                    <p className="text-[10px] text-slate-500">{pm.sub}</p>
-                  </button>
-                ))}
-              </div>
+
+              {paymentAccounts.length === 0 ? (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  Belum ada metode pembayaran aktif. Silakan hubungi admin Rete Mali.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {paymentAccounts.map((account) => {
+                    const isSelected = selectedAccount?.id === account.id;
+                    return (
+                      <button
+                        key={account.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAccountId(account.id);
+                          setPaymentMethod(resolvePaymentMethod(account));
+                        }}
+                        className={`p-2 rounded-xl text-left border transition-all ${
+                          isSelected
+                            ? 'bg-blue-50 border-blue-600 text-blue-900 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <p className="font-bold text-xs truncate">{account.providerName}</p>
+                        <p className="text-[10px] text-slate-500 truncate">
+                          {account.type === 'QRIS' ? 'Semua E-Wallet' : 'Transfer Bank'}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* QRIS Visual Preview */}
-            {paymentMethod === 'QRIS' && (
+            {selectedAccount?.type === 'QRIS' && (
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center space-y-3">
                 {/* Official Style QRIS Card Frame */}
                 <div className="w-56 bg-white border border-slate-300 rounded-2xl mx-auto shadow-sm overflow-hidden text-center">
                   {/* Top Red QRIS Header */}
                   <div className="bg-rose-600 px-3 py-1.5 flex items-center justify-between text-white">
                     <span className="font-black text-sm tracking-widest">QRIS</span>
-                    <span className="text-[9px] font-semibold tracking-tight uppercase">Pembayaran Digital</span>
+                    <span className="text-[9px] font-semibold tracking-tight uppercase">
+                      Pembayaran Digital
+                    </span>
                   </div>
 
                   <div className="p-3 flex flex-col items-center">
                     <p className="text-[11px] font-extrabold text-slate-900 leading-tight">
-                      TAMAN BACA RETE MALI
+                      {selectedAccount.providerName || 'TAMAN BACA RETE MALI'}
                     </p>
                     <p className="text-[9px] text-slate-500 font-mono mt-0.5">
-                      NMID: {paymentSettings.qrisNmid || 'ID1024389271649'}
+                      NMID: {selectedAccount.qrisNmid || 'ID1024389271649'}
                     </p>
 
                     {/* The QR Image */}
                     <div className="w-44 h-44 my-2 bg-white flex items-center justify-center p-1 rounded-xl border border-slate-100">
                       <img
                         src={
-                          paymentSettings.qrisImageUrl
-                            ? getImageUrl(paymentSettings.qrisImageUrl)
-                            : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=00020101021126580014ID.LINKAJA.WWW01189360001000000000000215${paymentSettings.qrisNmid || 'ID1024389271649'}51440014ID.CO.QRIS.WWW0215${paymentSettings.qrisNmid || 'ID1024389271649'}5204581253033605802ID5927TAMAN%20BACA%20RETE%20MALI6006BEKASI`
+                          selectedAccount.qrisImageUrl
+                            ? getImageUrl(selectedAccount.qrisImageUrl)
+                            : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=00020101021126580014ID.LINKAJA.WWW01189360001000000000000215${selectedAccount.qrisNmid || 'ID1024389271649'}51440014ID.CO.QRIS.WWW0215${selectedAccount.qrisNmid || 'ID1024389271649'}5204581253033605802ID5927TAMAN%20BACA%20RETE%20MALI6006BEKASI`
                         }
                         alt="QRIS Barcode Donasi Rete Mali"
                         className="w-full h-full object-contain"
@@ -400,7 +440,7 @@ export default function DonasiPage() {
                 </div>
 
                 <p className="text-[11px] font-bold text-slate-800">
-                  Yayasan Taman Baca Rete Mali Jatirangga
+                  {selectedAccount.accountName || 'Yayasan Taman Baca Rete Mali Jatirangga'}
                 </p>
                 <p className="text-[10px] text-slate-500">
                   Pindai menggunakan GoPay, OVO, Dana, ShopeePay, BCA Mobile, atau Livin Mandiri.
@@ -408,16 +448,18 @@ export default function DonasiPage() {
               </div>
             )}
 
-            {/* Bank Mandiri Dummy Account Display */}
-            {paymentMethod === 'BANK_MANDIRI' && (
+            {/* Rekening Bank — dirender dari kanal aktif yang dipilih */}
+            {selectedAccount && selectedAccount.type === 'BANK_TRANSFER' && (
               <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-black text-xs flex items-center justify-center">
-                      BM
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-black text-[10px] flex items-center justify-center">
+                      {(selectedAccount.providerName || 'BK').slice(0, 3).toUpperCase()}
                     </div>
                     <div>
-                      <p className="font-bold text-xs text-blue-950">Bank Mandiri</p>
+                      <p className="font-bold text-xs text-blue-950">
+                        {selectedAccount.providerName}
+                      </p>
                       <p className="text-[10px] text-slate-500">Transfer Antar Bank / VA</p>
                     </div>
                   </div>
@@ -428,20 +470,24 @@ export default function DonasiPage() {
 
                 <div className="bg-white border border-blue-100 rounded-xl p-3 flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-medium">Nomor Rekening Mandiri:</span>
+                    <span className="text-[10px] text-slate-400 block font-medium">
+                      Nomor Rekening {selectedAccount.providerName}:
+                    </span>
                     <span className="font-mono font-extrabold text-sm text-slate-900 tracking-wider">
-                      {paymentSettings.bankMandiri || '1234567890'}
+                      {selectedAccount.accountNumber || '-'}
                     </span>
                     <span className="text-[11px] text-slate-600 block mt-0.5">
-                      a.n. {paymentSettings.bankMandiriName || 'Yayasan Taman Baca Rete Mali'}
+                      a.n. {selectedAccount.accountName || 'Yayasan Taman Baca Rete Mali'}
                     </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleCopy(paymentSettings.bankMandiri || '1234567890', 'mandiri')}
+                    onClick={() =>
+                      handleCopy(selectedAccount.accountNumber || '', selectedAccount.id)
+                    }
                     className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
                   >
-                    {copiedField === 'mandiri' ? (
+                    {copiedField === selectedAccount.id ? (
                       <>
                         <CheckCircle2 size={13} className="text-emerald-600" />
                         <span className="text-emerald-700">Tersalin</span>
@@ -455,63 +501,11 @@ export default function DonasiPage() {
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-500 text-center">
-                  Sertakan berita transfer: <span className="font-semibold text-slate-700">Donasi Rete Mali</span>
+                  Sertakan berita transfer:{' '}
+                  <span className="font-semibold text-slate-700">Donasi Rete Mali</span>
                 </p>
               </div>
             )}
-
-            {/* Bank BCA Dummy Account Display */}
-            {paymentMethod === 'BANK_BCA' && (
-              <div className="bg-sky-50/70 border border-sky-200 rounded-2xl p-4 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-sky-600 text-white font-black text-xs flex items-center justify-center">
-                      BCA
-                    </div>
-                    <div>
-                      <p className="font-bold text-xs text-sky-950">Bank Central Asia (BCA)</p>
-                      <p className="text-[10px] text-slate-500">Transfer Antar Bank / Kliring</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-full">
-                    Online 24 Jam
-                  </span>
-                </div>
-
-                <div className="bg-white border border-sky-100 rounded-xl p-3 flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block font-medium">Nomor Rekening BCA:</span>
-                    <span className="font-mono font-extrabold text-sm text-slate-900 tracking-wider">
-                      {paymentSettings.bankBca || '0987654321'}
-                    </span>
-                    <span className="text-[11px] text-slate-600 block mt-0.5">
-                      a.n. {paymentSettings.bankBcaName || 'Yayasan Taman Baca Rete Mali'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(paymentSettings.bankBca || '0987654321', 'bca')}
-                    className="p-2 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
-                  >
-                    {copiedField === 'bca' ? (
-                      <>
-                        <CheckCircle2 size={13} className="text-emerald-600" />
-                        <span className="text-emerald-700">Tersalin</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={13} />
-                        <span>Salin</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-500 text-center">
-                  Sertakan berita transfer: <span className="font-semibold text-slate-700">Donasi Rete Mali</span>
-                </p>
-              </div>
-            )}
-
             {/* Submit */}
             <button
               type="submit"

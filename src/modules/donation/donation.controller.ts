@@ -4,8 +4,11 @@ import { DonationService } from "./donation.service";
 import {
   createBookDonationSchema,
   createFinancialDonationSchema,
+  createPaymentAccountSchema,
   donationQuerySchema,
+  financialDonationQuerySchema,
   paymentWebhookSchema,
+  updatePaymentAccountSchema,
   verifyBookDonationSchema,
 } from "./donation.validation";
 import { AuthRequest } from "@/middlewares/auth.middleware";
@@ -28,6 +31,27 @@ export class DonationController {
         res,
         message: "Berhasil mengambil ringkasan capaian donasi & jejak kebaikan",
         data: summary,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getFinancialDonations = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const query = financialDonationQuerySchema.parse(req.query);
+      const { data, meta } =
+        await this.donationService.getAllFinancialDonations(query);
+
+      paginatedResponse({
+        res,
+        message: "Berhasil mengambil daftar transaksi donasi finansial",
+        data,
+        meta,
       });
     } catch (error) {
       next(error);
@@ -177,6 +201,105 @@ export class DonationController {
         res,
         message: "Berhasil mengambil pengaturan rekening & QRIS donasi",
         data: settings,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getPaymentAccounts = async (
+    _req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const accounts = await this.donationService.getPaymentAccounts(true);
+      successResponse({
+        res,
+        message: "Berhasil mengambil kanal pembayaran donasi yang aktif",
+        data: accounts,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getAllPaymentAccounts = async (
+    _req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const accounts = await this.donationService.getPaymentAccounts(false);
+      successResponse({
+        res,
+        message: "Berhasil mengambil seluruh kanal pembayaran donasi",
+        data: accounts,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  createPaymentAccount = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const data = createPaymentAccountSchema.parse(req.body);
+      const account = await this.donationService.createPaymentAccount(
+        data,
+        req.file,
+      );
+
+      successResponse({
+        res,
+        statusCode: 201,
+        message: "Kanal pembayaran donasi berhasil ditambahkan",
+        data: account,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updatePaymentAccount = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const id = req.params["id"] as string;
+      const data = updatePaymentAccountSchema.parse(req.body);
+      const account = await this.donationService.updatePaymentAccount(
+        id,
+        data,
+        req.file,
+      );
+
+      successResponse({
+        res,
+        message: "Kanal pembayaran donasi berhasil diperbarui",
+        data: account,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  deletePaymentAccount = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const id = req.params["id"] as string;
+      await this.donationService.deletePaymentAccount(id);
+
+      successResponse({
+        res,
+        message: "Kanal pembayaran donasi berhasil dihapus",
       });
     } catch (error) {
       next(error);

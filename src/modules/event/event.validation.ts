@@ -123,8 +123,37 @@ export const submitEventReportSchema = z.object({
     .trim(),
 });
 
+export const attendanceReportQuerySchema = z.object({
+  eventId: z.string().max(100).trim().optional(),
+  from: z.string().min(1).optional(),
+  to: z.string().min(1).optional(),
+});
+
+export const eventRegistrationQuerySchema = z.object({
+  eventId: z.string().max(100).trim().optional(),
+  status: z.enum(["PENDING", "VERIFIED", "FAILED"]).optional(),
+  paidOnly: z
+    .string()
+    .transform((v) => v === "true")
+    .optional(),
+});
+
+export const verifyEventPaymentSchema = z.object({
+  status: z.enum(["VERIFIED", "FAILED"], {
+    error: "Status verifikasi tidak valid. Pilih: VERIFIED atau FAILED",
+  }),
+  note: z.string().max(300, "Catatan maksimal 300 karakter").trim().optional(),
+});
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
+export type AttendanceReportQueryInput = z.infer<
+  typeof attendanceReportQuerySchema
+>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type EventQueryInput = z.infer<typeof eventQuerySchema>;
 export type CheckInTicketInput = z.infer<typeof checkInTicketSchema>;
 export type SubmitEventReportInput = z.infer<typeof submitEventReportSchema>;
+export type EventRegistrationQueryInput = z.infer<
+  typeof eventRegistrationQuerySchema
+>;
+export type VerifyEventPaymentInput = z.infer<typeof verifyEventPaymentSchema>;
