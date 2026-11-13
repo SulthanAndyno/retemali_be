@@ -9,14 +9,37 @@ import { errorHandler } from "./middlewares/error.middleware";
 
 const app: Application = express();
 
+/**
+ * CORS allow-list, driven entirely by CLIENT_URL so no host is hardcoded.
+ * CLIENT_URL accepts one origin or a comma-separated list, e.g.
+ *   CLIENT_URL="https://retemali.id,https://www.retemali.id"
+ * In development the usual localhost Next.js origins are added automatically so
+ * the app keeps working without extra config.
+ */
+const DEV_ORIGINS: readonly string[] = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+];
+
+function parseOrigins(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
+    .filter((origin) => origin.length > 0);
+}
+
+const allowedOrigins: string[] = Array.from(
+  new Set([
+    ...parseOrigins(process.env.CLIENT_URL),
+    ...(process.env.NODE_ENV === "production" ? [] : DEV_ORIGINS),
+  ]),
+);
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(
   cors({
-    origin: [
-      process.env.CLIENT_URL ?? "http://localhost:3000",
-      "https://retemali.id",
-      "https://www.retemali.id",
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,

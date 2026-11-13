@@ -1,0 +1,19 @@
+# Build artefacts and local state — never shipped into the image.
+node_modules
+dist
+generated
+frontend/node_modules
+frontend/.next
+uploads
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+npm-debug.log*
+*.log
+RETEMALI_REQ
+Dockerfile
+.dockerignore
+docker-compose*.yml
+README.md

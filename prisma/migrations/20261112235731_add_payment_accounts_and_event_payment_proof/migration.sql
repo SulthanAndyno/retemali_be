@@ -1,5 +1,6 @@
 -- Migration: multiple toggleable donation payment channels + event payment proof
--- Applied to the Supabase Postgres instance referenced by DIRECT_URL.
+-- Baseline schema for this database is `0_init`; this migration assumes the
+-- tables created there (EventRegistration, PaymentSetting, PaymentAccount).
 
 -- CreateEnum
 CREATE TYPE "PaymentAccountType" AS ENUM ('QRIS', 'BANK_TRANSFER');
